@@ -1,10 +1,8 @@
-
-build
-*.*~
+release/
+build/
+video_docs/
+session.vim
+todo.txt
+*.vim
 *.rdbg
 *.bat
-*.vim
-cake.txt
-*video_docs
-todo.txt
-release
