@@ -1,8 +1,2 @@
 release/
 build/
-video_docs/
-session.vim
-todo.txt
-*.vim
-*.rdbg
-*.bat
