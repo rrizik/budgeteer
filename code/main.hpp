@@ -146,17 +146,15 @@ typedef struct Row {
 typedef struct Category{
     std::string row_number;
     char input[128];
-    char planned[128];
-    char actual[128];
+    s32 planned;
+    s32 actual;
     std::string diff;
 
     u32 row_count;
 
-    //Row rows[100];
     std::vector<Row> rows;
 } Category;
 
-//std::vector<Row> rows;
 std::vector<Category> categories;
 
 f32 column1_start = 8.0f;
@@ -180,7 +178,7 @@ f32 column6_width = 15.0f;
 f32 column7_start = column6_start + column6_width + 5.0f;
 
 f32 row_column1_start = 30.0f;
-f32 row_column1_width = 45.0f;
+f32 row_column1_width = 23.0f;
 
 f32 row_column2_start = row_column1_start + row_column1_width;
 f32 row_column2_width = 100.0f;
