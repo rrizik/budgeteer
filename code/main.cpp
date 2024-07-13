@@ -11,10 +11,6 @@
 #include "command.cpp"
 #include "game.cpp"
 
-#include "imgui/imgui.h"
-#include "imgui/imgui_impl_win32.h"
-#include "imgui/imgui_impl_dx11.h"
-
 static void
 init_paths(Arena* arena){
     build_path = os_application_path(global_arena);
@@ -272,10 +268,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         tm->frame_arena = push_arena(&tm->arena, MB(100));
         tm->asset_arena = push_arena(&tm->arena, MB(100));
 
-        pm->game_mode = GameMode_Game;
-
         show_cursor(true);
-        load_assets(tm->asset_arena);
 
         init_camera();
         init_console(&pm->arena, FontAsset_Arial);
@@ -284,21 +277,43 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         pm->current_font = FontAsset_Arial;
         pm->font = &tm->assets.fonts[FontAsset_Arial];
 
-
         // setup free entities array in reverse order
         entities_clear();
 
-        //audio_play(WaveAsset_Track1, 0.1f, true);
-        //audio_play(WaveAsset_Track5, 0.0f, true);
-        //audio_play(WaveAsset_Track4, 0.0f, true);
+        //u8* a = push_array(&pm->arena, u8, 128);
+        for(u32 i=0; i<SUB_CATEGORIES_MAX; ++i){
+            String8* str = pm->sub_categories + i;
+            str->str = push_array(&pm->arena, u8, 128);
+            str->size = 128;
+        }
 
-        pm->ship = add_ship(TextureAsset_Ship, make_v2(SCREEN_WIDTH/2, SCREEN_HEIGHT/2), make_v2(75, 75));
-        pm->ship_loaded = true;
-        pm->lives = MAX_LIVES;
+        //for(u32 i=0; i<1024; ++i){
+        //    Row* row = rows + i;
+        //    row->text.str = push_array(&pm->arena, u8, 128);
+        //    if(i == 0){
+        //        row->text.str[0] = '1';
+        //    }
+        //    if(i == 1){
+        //        row->text.str[0] = '2';
+        //    }
+        //    if(i == 2){
+        //        row->text.str[0] = '3';
+        //    }
+        //    if(i == 3){
+        //        row->text.str[0] = '4';
+        //    }
+        //    row->text.size = 128;
+        //}
 
-        pm->level_index = 0;
-        init_levels();
-        pm->current_level = &pm->levels[pm->level_index];
+        //categories.push_back({"1", "Home", "", "", "0"});
+
+        //rows.push_back({"1", "Rent", "1000", "100", "0"});
+        //rows.push_back({"2", "Cat", "500", "0", "0"});
+        //rows.push_back({"3", "Groceries", "300", "400", "0"});
+        //pm->sub_categories_count = 3;
+        //for(u32 i=4; i<pm->sub_categories_count; ++i){
+        //    rows.push_back({std::to_string(i), "", "", "", ""});
+        //}
 
         memory.initialized = true;
     }
@@ -312,221 +327,36 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
 
-
-
-
         MSG message;
         while(PeekMessageW(&message, window.handle, 0, 0, PM_REMOVE)){
             TranslateMessage(&message);
             DispatchMessage(&message);
         }
 
-        //audio_play(440);
-        //audio_play_wave(&wav);
+        while(!events_empty(&events)){
+            Event event = events_next(&events);
+
+            if(event.type == KEYBOARD){
+                if(event.keycode == KeyCode_ESCAPE){
+                    should_quit = true;
+                }
+            }
+            if(event.type == QUIT){
+                should_quit = true;
+            }
+        }
+
         u64 now_ticks = clock.get_os_timer();
         f64 frame_time = clock.get_seconds_elapsed(now_ticks, last_ticks);
         MSPF = 1000/1000/((f64)clock.frequency / (f64)(now_ticks - last_ticks));
         last_ticks = now_ticks;
 
-        // don't know where everything is yet on first frame, hence looking at previous frame
-        UI_Layout* layout1 = ui_make_layout(tm->frame_arena, make_v2(SCREEN_WIDTH/2, SCREEN_HEIGHT/2), str8_literal("layout1"), UI_LayoutFlag_Clickable | UI_LayoutFlag_DrawBackground);
-        push_layout(tm->frame_arena, layout1);
-
-        UI_Layout* layout2 = ui_make_layout(tm->frame_arena, make_v2(0,0), str8_literal("layout2"), UI_LayoutFlag_Clickable | UI_LayoutFlag_DrawBackground);
-        push_layout(tm->frame_arena, layout2);
-        if(ui_button(tm->frame_arena, str8_literal("button 1"))){
-        }
-        if(ui_button(tm->frame_arena, str8_literal("button 2"))){
-        }
-        if(ui_button(tm->frame_arena, str8_literal("button 3"))){
-        }
-        pop_layout();
-
-        if(ui_button(tm->frame_arena, str8_literal("button 4"))){
-        }
-        if(ui_button(tm->frame_arena, str8_literal("button 5"))){
-        }
-
-        UI_Layout* layout3 = ui_make_layout(tm->frame_arena, make_v2(0,0), str8_literal("layout3"), UI_LayoutFlag_Clickable | UI_LayoutFlag_DrawBackground);
-        push_layout(tm->frame_arena, layout3);
-        if(ui_button(tm->frame_arena, str8_literal("button 6"))){
-        }
-        if(ui_button(tm->frame_arena, str8_literal("button 7"))){
-        }
-        pop_layout();
-
-        if(ui_button(tm->frame_arena, str8_literal("button 8"))){
-        }
-
-        UI_Layout* layout4 = ui_make_layout(tm->frame_arena, make_v2(0,0), str8_literal("layout4"), UI_LayoutFlag_Clickable | UI_LayoutFlag_DrawBackground);
-        push_layout(tm->frame_arena, layout4);
-        if(ui_button(tm->frame_arena, str8_literal("button 9"))){
-        }
-
-        UI_Layout* layout5 = ui_make_layout(tm->frame_arena, make_v2(0,0), str8_literal("layout5"), UI_LayoutFlag_Clickable | UI_LayoutFlag_DrawBackground);
-        push_layout(tm->frame_arena, layout5);
-        if(ui_button(tm->frame_arena, str8_literal("button 10"))){
-        }
-        if(ui_button(tm->frame_arena, str8_literal("button 11"))){
-        }
-        pop_layout();
-
-        if(ui_button(tm->frame_arena, str8_literal("button 12"))){
-        }
-
-        UI_Layout* layout6 = ui_make_layout(tm->frame_arena, make_v2(0,0), str8_literal("layout6"), UI_LayoutFlag_Clickable | UI_LayoutFlag_DrawBackground);
-        push_layout(tm->frame_arena, layout6);
-        if(ui_button(tm->frame_arena, str8_literal("button 13"))){
-        }
-
-        // simulation
-        accumulator += frame_time;
-        while(accumulator >= clock.dt){
-            begin_timed_scope("simulation");
-            update_game(&window, &memory, &events);
-
-            accumulator -= clock.dt;
-            time_elapsed += clock.dt;
-            simulations++;
-
-            clear_controller_pressed();
-        }
-        //print("sims %i\n", simulations);
-        audio_play_cursors();
-
         // command arena
         draw_clear_color(tm->render_command_arena, BACKGROUND_COLOR);
         // todo: also use flags here
-        for(s32 index = 0; index < array_count(pm->entities); ++index){
-            begin_timed_scope("build command arena");
-            Entity *e = pm->entities + index;
-            if(has_flags(e->flags, EntityFlag_Active)){
-
-                switch(e->type){
-                    case EntityType_Quad:{
-                        v2 p0 = make_v2(e->pos.x - e->dim.w/2, e->pos.y - e->dim.h/2);
-                        v2 p1 = make_v2(e->pos.x + e->dim.w/2, e->pos.y - e->dim.h/2);
-                        v2 p2 = make_v2(e->pos.x + e->dim.w/2, e->pos.y + e->dim.h/2);
-                        v2 p3 = make_v2(e->pos.x - e->dim.w/2, e->pos.y + e->dim.h/2);
-
-                        //f32 deg = deg_from_dir(e->dir);
-                        p0 = rotate_point_deg(p0, e->deg, e->pos);
-                        p1 = rotate_point_deg(p1, e->deg, e->pos);
-                        p2 = rotate_point_deg(p2, e->deg, e->pos);
-                        p3 = rotate_point_deg(p3, e->deg, e->pos);
-
-                        draw_quad(tm->render_command_arena, p0, p1, p2, p3, e->color);
-                    } break;
-                    case EntityType_Asteroid:
-                    case EntityType_Bullet:
-                    case EntityType_Texture:{
-                        if(has_flags(e->flags, EntityFlag_Particle)){
-                            u32 a = 1;
-                        }
-                        v2 p0 = make_v2(e->pos.x - e->dim.w/2, e->pos.y - e->dim.h/2);
-                        v2 p1 = make_v2(e->pos.x + e->dim.w/2, e->pos.y - e->dim.h/2);
-                        v2 p2 = make_v2(e->pos.x + e->dim.w/2, e->pos.y + e->dim.h/2);
-                        v2 p3 = make_v2(e->pos.x - e->dim.w/2, e->pos.y + e->dim.h/2);
-
-                        Rect e_rect = make_rect(make_v2(e->pos.x - e->dim.w/2, e->pos.y - e->dim.h/2),
-                                                make_v2(e->pos.x + e->dim.w/2, e->pos.y + e->dim.h/2));
-
-                        p0 = rotate_point_deg(p0, e->deg, e->pos);
-                        p1 = rotate_point_deg(p1, e->deg, e->pos);
-                        p2 = rotate_point_deg(p2, e->deg, e->pos);
-                        p3 = rotate_point_deg(p3, e->deg, e->pos);
-
-                        //push_line(tm->render_command_arena, p0, p1, 2, GREEN);
-                        //push_line(tm->render_command_arena, p1, p2, 2, GREEN);
-                        //push_line(tm->render_command_arena, p2, p3, 2, GREEN);
-                        //push_line(tm->render_command_arena, p3, p0, 2, GREEN);
-
-                        draw_texture(tm->render_command_arena, e->texture, p0, p1, p2, p3, e->color);
-                    } break;
-                    case EntityType_Ship:{
-                        v2 p0 = make_v2(e->pos.x - e->dim.w/2, e->pos.y - e->dim.h/2);
-                        v2 p1 = make_v2(e->pos.x + e->dim.w/2, e->pos.y - e->dim.h/2);
-                        v2 p2 = make_v2(e->pos.x + e->dim.w/2, e->pos.y + e->dim.h/2);
-                        v2 p3 = make_v2(e->pos.x - e->dim.w/2, e->pos.y + e->dim.h/2);
-
-                        Rect e_rect = make_rect(make_v2(e->pos.x - e->dim.w/2, e->pos.y - e->dim.h/2),
-                                                make_v2(e->pos.x + e->dim.w/2, e->pos.y + e->dim.h/2));
-
-                        p0 = rotate_point_deg(p0, e->deg, e->pos);
-                        p1 = rotate_point_deg(p1, e->deg, e->pos);
-                        p2 = rotate_point_deg(p2, e->deg, e->pos);
-                        p3 = rotate_point_deg(p3, e->deg, e->pos);
-
-                        //push_line(tm->render_command_arena, p0, p1, 2, GREEN);
-                        //push_line(tm->render_command_arena, p1, p2, 2, GREEN);
-                        //push_line(tm->render_command_arena, p2, p3, 2, GREEN);
-                        //push_line(tm->render_command_arena, p3, p0, 2, GREEN);
-
-                        if(pm->ship->immune){
-                            draw_texture(tm->render_command_arena, e->texture, p0, p1, p2, p3, ORANGE);
-                        }
-                        else{
-                            draw_texture(tm->render_command_arena, e->texture, p0, p1, p2, p3, e->color);
-                        }
-
-                        // todo: yuckiness for ship exhaust
-                        if(pm->ship->accelerating){
-                            p0.x += (55 * (-e->dir.x));
-                            p0.y += (55 * (-e->dir.y));
-                            p1.x += (55 * (-e->dir.x));
-                            p1.y += (55 * (-e->dir.y));
-                            p2.x += (55 * (-e->dir.x));
-                            p2.y += (55 * (-e->dir.y));
-                            p3.x += (55 * (-e->dir.x));
-                            p3.y += (55 * (-e->dir.y));
-                            u32 random_flame = random_range_u32(5) + 3;
-                            draw_texture(tm->render_command_arena, random_flame, p0, p1, p2, p3, e->color);
-                        }
-
-                    } break;
-                }
-            }
-        }
 
         Font* font = &tm->assets.fonts[pm->current_font];
 
-        if(!pm->lives){
-            String8 text = str8_formatted(tm->frame_arena, "GAME OVER - Score: %i", pm->score);
-            f32 width = font_string_width(pm->current_font, text);
-            f32 x = SCREEN_WIDTH/2 - width/2;
-            draw_text(tm->render_command_arena, pm->current_font, text, make_v2(x, SCREEN_HEIGHT/2), ORANGE);
-
-            text = str8_literal("R - restart");
-            width = font_string_width(pm->current_font, text);
-            x = SCREEN_WIDTH/2 - width/2;
-            draw_text(tm->render_command_arena, pm->current_font, text, make_v2(x,
-                        SCREEN_HEIGHT/2 + ((f32)font->vertical_offset)), ORANGE);
-        }
-        if(game_won()){
-            String8 text = str8_formatted(tm->frame_arena, "CHICKEN DINNER - Score: %i", pm->score);
-            f32 width = font_string_width(pm->current_font, text);
-            f32 x = SCREEN_WIDTH/2 - width/2;
-            draw_text(tm->render_command_arena, pm->current_font, text, make_v2(x, SCREEN_HEIGHT/2), ORANGE);
-
-            text = str8_literal("R - restart");
-            width = font_string_width(pm->current_font, text);
-            x = SCREEN_WIDTH/2 - width/2;
-            draw_text(tm->render_command_arena, pm->current_font, text, make_v2(x,
-                        SCREEN_HEIGHT/2 + ((f32)font->vertical_offset)), ORANGE);
-        }
-        String8 score = str8_formatted(tm->frame_arena, "SCORE: %i", pm->score);
-        draw_text(tm->render_command_arena, pm->current_font, score, make_v2(text_padding, text_padding + ((f32)font->ascent * font->scale)), ORANGE);
-
-        String8 lives = str8_formatted(tm->frame_arena, "LIVES: %i", pm->lives);
-        f32 width = font_string_width(pm->current_font, lives);
-        draw_text(tm->render_command_arena, pm->current_font, lives, make_v2(SCREEN_WIDTH - width - text_padding, ((f32)(font->ascent) * font->scale) + text_padding), ORANGE);
-
-        String8 level_str = str8_formatted(tm->frame_arena, "LEVEL: %i", pm->level_index + 1);
-        draw_text(tm->render_command_arena, pm->current_font, level_str, make_v2(text_padding, text_padding + ((f32)font->ascent * font->scale) + ((f32)font->vertical_offset)), ORANGE);
-
-        console_draw();
-
-        frame_count++;
         f64 second_elapsed = clock.get_seconds_elapsed(clock.get_os_timer(), frame_tick_start);
         if(second_elapsed > 1){
             FPS = ((f64)frame_count / second_elapsed);
@@ -536,42 +366,266 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
         //print("FPS: %f - MSPF: %f - time_dt: %f - accumulator: %lu -  frame_time: %f - second_elapsed: %f - simulations: %i\n", FPS, MSPF, clock.dt, accumulator, frame_time, second_elapsed, simulations);
         String8 fps = str8_formatted(tm->frame_arena, "FPS: %.2f", FPS);
-        draw_text(tm->render_command_arena, pm->current_font, fps, make_v2(SCREEN_WIDTH - text_padding - font_string_width(pm->current_font, fps), SCREEN_HEIGHT - text_padding), ORANGE);
-
-        Level* level = pm->current_level;
-        String8 info_str = str8_formatted(tm->frame_arena, "level: %i\ntotal: %i\nspawned: %i\ndestroyed:%i", pm->level_index, level->asteroid_count_max, level->asteroid_spawned, level->asteroid_destroyed);
-        //draw_text(tm->render_command_arena, pm->current_font, info_str, make_v2(50, SCREEN_HEIGHT/2), TEAL);
-
-        s32 found_count = 0;
-        for(s32 i=0; i < array_count(pm->entities); i++){
-            Entity* e = pm->entities + i;
-            if(e->type == EntityType_Asteroid){
-                if(has_flags(e->flags, EntityFlag_Active)){
-                    String8 str = str8_formatted(tm->frame_arena, "Asteroids - (%i)", e->health);
-                    f32 str_width = font_string_width(pm->current_font, str);
-                    //draw_text(tm->render_command_arena, pm->current_font, str, make_v2(SCREEN_WIDTH - str_width, (f32)(100 + (found_count * pm->font->vertical_offset))), TEAL);
-                    found_count++;
-                }
-            }
-        }
 
         // draw everything
         draw_commands(tm->render_command_arena);
 
-        ImGui::ShowDemoWindow(); // Show demo window! :)
+
+
+
+        ImGui::Begin("Draggable Rows Example");
+
+        if (ImGui::Button("+")) {
+            pm->categories_count++;
+            categories.push_back({std::to_string(pm->categories_count), "", "", "", ""});
+        }
+
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(column2_start);
+        ImGui::Text("Category");
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(column3_start);
+        ImGui::Text("Planned");
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(column4_start);
+        ImGui::Text("Actual");
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(column5_start);
+        ImGui::Text("Diff");
+
+        ImGui::Separator();
+        for (s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
+            Category& category = categories[c_idx];
+
+            //for(s32 r_idx = 0; r_idx < pm->sub_categories_count; ++ r_idx){
+            //    Row row = category.rows[r_idx];
+            //}
+
+            ImGui::SetCursorPosX(column1_start);
+            ImGui::Button(category.row_number.c_str());
+            // Handle drag and drop
+            if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+                ImGui::SetDragDropPayload("DRAG_ROW", &c_idx, sizeof(int));
+                ImGui::Text("%s", category.input);
+                ImGui::EndDragDropSource();
+            }
+            if(ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DRAG_ROW")) {
+                    int* payload_data = (int*)payload->Data;
+                    int from_index = *payload_data;
+                    if(from_index != c_idx) {
+                        std::swap(categories[from_index].row_number, categories[c_idx].row_number);
+                        std::swap(categories[from_index], categories[c_idx]);
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+
+            ImGui::SameLine();
+
+            std::string input_id;
+            ImGui::SetCursorPosX(column2_start);
+            ImGui::PushItemWidth(column2_width);
+            input_id = "##input" + std::to_string(c_idx);
+            ImGui::InputText(input_id.c_str(), category.input, 128);
+            ImGui::PopItemWidth();
+
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(column3_start);
+            ImGui::PushItemWidth(column3_width);
+            input_id = "##planned" + std::to_string(c_idx);
+            ImGui::InputText(input_id.c_str(), category.planned, 128, ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_CallbackCharFilter, InputTextCallback);
+            ImGui::PopItemWidth();
+
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(column4_start);
+            ImGui::PushItemWidth(column4_width);
+            input_id = "##actual" + std::to_string(c_idx);
+            ImGui::InputText(input_id.c_str(), category.actual, 128, ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_CallbackCharFilter, InputTextCallback);
+            ImGui::PopItemWidth();
+
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(column5_start);
+            int planned = std::atoi(category.planned);
+            int actual = std::atoi(category.actual);
+            category.diff = std::to_string(planned - actual);
+            ImGui::Text(category.diff.c_str());
+
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(column6_start);
+            ImGui::PushID(c_idx);
+            if (ImGui::Button("+")) {
+                category.row_count++;
+                category.rows.push_back({std::to_string(category.row_count), "", "", "", ""});
+            }
+            ImGui::PopID();
+
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(column7_start);
+            ImGui::PushID(c_idx);
+            if(ImGui::Button("x")){
+                categories.erase(categories.begin() + c_idx);
+                --pm->categories_count;
+                category.row_count = 0;
+                for (int idx = 0; idx < pm->categories_count; ++idx){
+                    categories[idx].row_number = std::to_string(idx + 1);
+                }
+            }
+            ImGui::PopID();
+
+            for(s32 r_idx = 0; r_idx < category.row_count; ++r_idx){
+                Row& row = category.rows[r_idx];
+
+                ImGui::SetCursorPosX(row_column1_start);
+                ImGui::Button(row.row_number.c_str());
+                // Handle drag and drop
+                if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+                    ImGui::SetDragDropPayload("DRAG_ROW", &r_idx, sizeof(int));
+                    ImGui::Text("%s", row.input);
+                    ImGui::EndDragDropSource();
+                }
+                if(ImGui::BeginDragDropTarget()) {
+                    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DRAG_ROW")) {
+                        int* payload_data = (int*)payload->Data;
+                        int from_index = *payload_data;
+                        if(from_index != r_idx) {
+                            std::swap(category.rows[from_index].row_number, category.rows[r_idx].row_number);
+                            std::swap(category.rows[from_index], category.rows[r_idx]);
+                        }
+                    }
+                    ImGui::EndDragDropTarget();
+                }
+
+                ImGui::SameLine();
+
+                std::string input_id;
+                ImGui::SetCursorPosX(row_column2_start);
+                ImGui::PushItemWidth(row_column2_width);
+                input_id = "##input" + std::to_string(r_idx) + std::to_string(c_idx);
+                ImGui::InputText(input_id.c_str(), row.input, 128);
+                ImGui::PopItemWidth();
+
+                ImGui::SameLine();
+                ImGui::SetCursorPosX(row_column3_start);
+                ImGui::PushItemWidth(row_column3_width);
+                input_id = "##planned" + std::to_string(r_idx) + std::to_string(c_idx);
+                ImGui::InputText(input_id.c_str(), row.planned, 128, ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_CallbackCharFilter, InputTextCallback);
+                ImGui::PopItemWidth();
+
+                ImGui::SameLine();
+                ImGui::SetCursorPosX(row_column4_start);
+                ImGui::PushItemWidth(row_column4_width);
+                input_id = "##actual" + std::to_string(r_idx) + std::to_string(c_idx);
+                ImGui::InputText(input_id.c_str(), row.actual, 128, ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_CallbackCharFilter, InputTextCallback);
+                ImGui::PopItemWidth();
+
+                ImGui::SameLine();
+                ImGui::SetCursorPosX(row_column5_start);
+                int planned = std::atoi(row.planned);
+                int actual = std::atoi(row.actual);
+                row.diff = std::to_string(planned - actual);
+                ImGui::Text(row.diff.c_str());
+
+                ImGui::SameLine();
+                ImGui::SetCursorPosX(row_column6_start);
+                std::string id = std::to_string(r_idx + 1) + std::to_string(c_idx + 1);
+                s32 v = std::atoi(id.c_str());
+                ImGui::PushID(v);
+                if(ImGui::Button("x")){
+                    print("OK\n");
+                    category.rows.erase(category.rows.begin() + r_idx);
+                    --category.row_count;
+                    for (int idx = 0; idx < category.row_count; ++idx){
+                        category.rows[idx].row_number = std::to_string(idx + 1);
+                    }
+                }
+                ImGui::PopID();
+            }
+        }
+
+        //for (int i = 0; i < pm->sub_categories_count; ++i){
+        //    Row& row = rows[i];
+
+        //    ImGui::Button(row.row_number.c_str());
+        //    // Handle drag and drop
+        //    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+        //        ImGui::SetDragDropPayload("DRAG_ROW", &i, sizeof(int));
+        //        ImGui::Text("%s", row.input);
+        //        ImGui::EndDragDropSource();
+        //    }
+        //    if(ImGui::BeginDragDropTarget()) {
+        //        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DRAG_ROW")) {
+        //            int* payload_data = (int*)payload->Data;
+        //            int from_index = *payload_data;
+        //            if(from_index != i) {
+        //                std::swap(rows[from_index].row_number, rows[i].row_number);
+        //                std::swap(rows[from_index], rows[i]);
+        //            }
+        //        }
+        //        ImGui::EndDragDropTarget();
+        //    }
+
+        //    ImGui::SameLine();
+
+        //    std::string input_id;
+        //    ImGui::SetCursorPosX(column1_start);
+        //    ImGui::PushItemWidth(column1_width);
+        //    input_id = "##input" + std::to_string(i * 100);
+        //    ImGui::InputText(input_id.c_str(), row.input, 128);
+        //    ImGui::PopItemWidth();
+
+        //    ImGui::SameLine();
+        //    ImGui::SetCursorPosX(column2_start);
+        //    ImGui::PushItemWidth(column2_width);
+        //    input_id = "##planned" + std::to_string((i + 1) * 100);
+        //    ImGui::InputText(input_id.c_str(), row.planned, 128, ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_CallbackCharFilter, InputTextCallback);
+        //    ImGui::PopItemWidth();
+
+        //    ImGui::SameLine();
+        //    ImGui::SetCursorPosX(column3_start);
+        //    ImGui::PushItemWidth(column3_width);
+        //    input_id = "##actual" + std::to_string((i + 2) * 100);
+        //    ImGui::InputText(input_id.c_str(), row.actual, 128, ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_CallbackCharFilter, InputTextCallback);
+        //    ImGui::PopItemWidth();
+
+        //    ImGui::SameLine();
+        //    ImGui::SetCursorPosX(column4_start);
+        //    int planned = std::atoi(row.planned);
+        //    int actual = std::atoi(row.actual);
+        //    row.diff = std::to_string(planned - actual);
+        //    ImGui::Text(row.diff.c_str());
+
+        //    ImGui::SameLine();
+        //    ImGui::SetCursorPosX(column5_start);
+        //    ImGui::PushID(i);
+        //    if(ImGui::Button("x")){
+        //        rows.erase(rows.begin() + i);
+        //        --pm->sub_categories_count;
+        //        for (int idx = 0; idx < pm->sub_categories_count; ++idx){
+        //            rows[idx].row_number = std::to_string(idx + 1);
+        //        }
+        //    }
+        //    ImGui::PopID();
+        //}
+
+        ImGui::End();
+
+
+
+        //ImGui::ShowDemoWindow(); // Show demo window! :)
 
         {
             ImGui::Render();
             ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
         }
 
+        console_draw();
         d3d_swapchain->Present(1, 0);
 
         arena_free(tm->frame_arena);
         arena_free(tm->render_command_arena);
 		simulations = 0;
         total_frames++;
-        top_layout = 0;
         //end_profiler();
     }
 

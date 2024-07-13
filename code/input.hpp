@@ -1,6 +1,10 @@
 #ifndef INPUT_H
 #define INPUT_H
 
+#ifndef EVENTS
+#define EVENTS 0
+#endif
+
 // CLEANUP: everything that is commented out, I dont think needs to exist.
 typedef enum KeyCode{
     KeyCode_None = 0,
@@ -179,7 +183,7 @@ static void  events_init(Events* events);
 static u32   events_count(Events* events);
 static bool  events_full(Events* events);
 static bool  events_empty(Events* events);
-static u32   mask(Events* events, u32 idx);
+static u32   events_mask(Events* events, u32 idx);
 static void  events_add(Events* events, Event event);
 static Event events_next(Events* events);
 

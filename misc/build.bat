@@ -48,7 +48,7 @@ rem cl %cl_imgui_flags% %optimization% %cl_ignore_warnings% %cl_includes% /c ..\
 rem 
 rem cl %cl_flags% main.obj imgui.obj imgui_impl_dx11.obj imgui_impl_win32.obj /link d3d11.lib d3dcompiler.lib /out:main.exe
 
-cl %cl_imgui_flags% %cl_includes% ..\code\main.cpp ..\code\imgui\imgui*.cpp
+cl /EHsc %cl_imgui_flags% %cl_includes% ..\code\main.cpp ..\code\imgui\imgui*.cpp
 rem cl /I ..\..\base\code /Zi /nologo -std:c++latest ..\code\main.cpp ..\code\imgui\imgui*.cpp
 
 popd

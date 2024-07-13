@@ -26,7 +26,7 @@ events_empty(Events* events){
 }
 
 static u32
-mask(Events* events, u32 idx){
+events_mask(Events* events, u32 idx){
     u32 result = idx & (events->size - 1);
     return(result);
 }
@@ -35,7 +35,7 @@ static void
 events_add(Events* events, Event event){
     assert(!events_full(events));
 
-    u32 masked_idx = mask(events, events->write++);
+    u32 masked_idx = events_mask(events, events->write++);
     events->e[masked_idx] = event;
 }
 
@@ -43,7 +43,7 @@ static Event
 events_next(Events* events){
     assert(!events_empty(events));
 
-    u32 masked_idx = mask(events, events->read++);
+    u32 masked_idx = events_mask(events, events->read++);
     Event event = events->e[masked_idx];
     return(event);
 }

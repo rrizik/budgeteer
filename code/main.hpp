@@ -26,13 +26,16 @@
 #include "entity.hpp"
 #include "console.hpp"
 #include "command.hpp"
-#include "ui.hpp"
+
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_win32.h"
+#include "imgui/imgui_impl_dx11.h"
+
 
 #include "input.cpp"
 #include "clock.cpp"
 #include "camera.cpp"
 #include "rect.cpp"
-#include "ui.cpp"
 #include "entity.cpp"
 
 static String8 build_path;
@@ -103,6 +106,17 @@ typedef struct PermanentMemory{
 
     u32 current_font;
     f64 spawn_t;
+
+#define SUB_CATEGORIES_MAX 1024
+    u32 sub_categories_count;
+    u32 sub_categories_index;
+    String8 sub_categories[SUB_CATEGORIES_MAX];
+    bool selected_sub_categories[1024];
+
+#define CATEGORIES_MAX 1024
+    u32 categories_count;
+    u32 categories_index;
+    String8 categories[CATEGORIES_MAX];
 } PermanentMemory, State;
 global PermanentMemory* pm;
 
@@ -118,5 +132,78 @@ global TransientMemory* tm;
 
 f32 text_padding = 20;
 
+#include <string>
+#include <vector>
+
+typedef struct Row {
+    std::string row_number;
+    char input[128];
+    char planned[128];
+    char actual[128];
+    std::string diff;
+} Row;
+
+typedef struct Category{
+    std::string row_number;
+    char input[128];
+    char planned[128];
+    char actual[128];
+    std::string diff;
+
+    u32 row_count;
+
+    //Row rows[100];
+    std::vector<Row> rows;
+} Category;
+
+//std::vector<Row> rows;
+std::vector<Category> categories;
+
+f32 column1_start = 8.0f;
+f32 column1_width = 45.0f;
+
+f32 column2_start = column1_start + column1_width;
+f32 column2_width = 100.0f;
+
+f32 column3_start = column2_start + column2_width + 5.0f;
+f32 column3_width = 50.0f;
+
+f32 column4_start = column3_start + column3_width + 5.0f;
+f32 column4_width = 50.0f;
+
+f32 column5_start = column4_start + column4_width + 5.0f;
+f32 column5_width = 50.0f;
+
+f32 column6_start = column5_start + column5_width + 5.0f;
+f32 column6_width = 15.0f;
+
+f32 column7_start = column6_start + column6_width + 5.0f;
+
+f32 row_column1_start = 30.0f;
+f32 row_column1_width = 45.0f;
+
+f32 row_column2_start = row_column1_start + row_column1_width;
+f32 row_column2_width = 100.0f;
+
+f32 row_column3_start = row_column2_start + row_column2_width + 5.0f;
+f32 row_column3_width = 50.0f;
+
+f32 row_column4_start = row_column3_start + row_column3_width + 5.0f;
+f32 row_column4_width = 50.0f;
+
+f32 row_column5_start = row_column4_start + row_column4_width + 5.0f;
+f32 row_column5_width = 50.0f;
+
+f32 row_column6_start = row_column5_start + row_column5_width + 5.0f;
+f32 row_column6_width = 15.0f;
+
+f32 row_column7_start = row_column6_start + row_column6_width + 5.0f;
+static int InputTextCallback(ImGuiInputTextCallbackData* data){
+    if (data->EventChar < '0' || data->EventChar > '9')
+        print("no\n");
+        return 0;
+
+    return 1;
+}
 
 #endif
