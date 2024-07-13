@@ -399,7 +399,18 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
             ImGui::SetCursorPosX(column1_start);
             ImGui::PushID(c_idx);
-            ImGui::Button("\\");
+            if(category.draw_rows){
+                if(ImGui::Button("V")){
+                    category.draw_rows = false;
+                }
+            }
+            else{
+                if(ImGui::Button(">")){
+                    if(category.row_count){
+                        category.draw_rows = true;
+                    }
+                }
+            }
             ImGui::PopID();
             // Handle drag and drop
             if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
@@ -449,6 +460,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             if (ImGui::Button("+")) {
                 category.row_count++;
                 category.rows.push_back({std::to_string(category.row_count), "", "", "", ""});
+                category.draw_rows = true;
             }
             ImGui::PopID();
 
@@ -475,71 +487,73 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                 std::string s_id = std::to_string(r_idx + 1) + std::to_string(c_idx + 1);
                 s32 uid = std::atoi(s_id.c_str());
 
-                ImGui::SetCursorPosX(row_column1_start);
-                ImGui::PushID(uid);
-                ImGui::Button("-");
-                ImGui::PopID();
+                if(category.draw_rows){
+                    ImGui::SetCursorPosX(row_column1_start);
+                    ImGui::PushID(uid);
+                    ImGui::Button("-");
+                    ImGui::PopID();
 
-                // Handle drag and drop
-                if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-                    ImGui::SetDragDropPayload("DRAG_ROW", &r_idx, sizeof(int));
-                    ImGui::Text("%s", row.input);
-                    ImGui::EndDragDropSource();
-                }
-                if(ImGui::BeginDragDropTarget()) {
-                    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DRAG_ROW")) {
-                        int* payload_data = (int*)payload->Data;
-                        int from_index = *payload_data;
-                        if(from_index != r_idx) {
-                            std::swap(category.rows[from_index].row_number, category.rows[r_idx].row_number);
-                            std::swap(category.rows[from_index], category.rows[r_idx]);
+                    // Handle drag and drop
+                    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+                        ImGui::SetDragDropPayload("DRAG_ROW", &r_idx, sizeof(int));
+                        ImGui::Text("%s", row.input);
+                        ImGui::EndDragDropSource();
+                    }
+                    if(ImGui::BeginDragDropTarget()) {
+                        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DRAG_ROW")) {
+                            int* payload_data = (int*)payload->Data;
+                            int from_index = *payload_data;
+                            if(from_index != r_idx) {
+                                std::swap(category.rows[from_index].row_number, category.rows[r_idx].row_number);
+                                std::swap(category.rows[from_index], category.rows[r_idx]);
+                            }
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
+
+                    ImGui::SameLine();
+
+                    std::string input_id;
+                    ImGui::SetCursorPosX(row_column2_start);
+                    ImGui::PushItemWidth(row_column2_width);
+                    input_id = "##input" + std::to_string(r_idx) + std::to_string(c_idx);
+                    ImGui::InputText(input_id.c_str(), row.input, 128);
+                    ImGui::PopItemWidth();
+
+                    ImGui::SameLine();
+                    ImGui::SetCursorPosX(row_column3_start);
+                    ImGui::PushItemWidth(row_column3_width);
+                    input_id = "##planned" + std::to_string(r_idx) + std::to_string(c_idx);
+                    ImGui::InputText(input_id.c_str(), row.planned, 128, ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_CallbackCharFilter, InputTextCallback);
+                    ImGui::PopItemWidth();
+
+                    ImGui::SameLine();
+                    ImGui::SetCursorPosX(row_column4_start);
+                    ImGui::PushItemWidth(row_column4_width);
+                    input_id = "##actual" + std::to_string(r_idx) + std::to_string(c_idx);
+                    ImGui::InputText(input_id.c_str(), row.actual, 128, ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_CallbackCharFilter, InputTextCallback);
+                    ImGui::PopItemWidth();
+
+                    ImGui::SameLine();
+                    ImGui::SetCursorPosX(row_column5_start);
+                    int planned = std::atoi(row.planned);
+                    int actual = std::atoi(row.actual);
+                    row.diff = std::to_string(planned - actual);
+                    ImGui::Text(row.diff.c_str());
+
+                    ImGui::SameLine();
+                    ImGui::SetCursorPosX(row_column6_start);
+                    ImGui::PushID(uid);
+                    if(ImGui::Button("x")){
+                        print("OK\n");
+                        category.rows.erase(category.rows.begin() + r_idx);
+                        --category.row_count;
+                        for (int idx = 0; idx < category.row_count; ++idx){
+                            category.rows[idx].row_number = std::to_string(idx + 1);
                         }
                     }
-                    ImGui::EndDragDropTarget();
+                    ImGui::PopID();
                 }
-
-                ImGui::SameLine();
-
-                std::string input_id;
-                ImGui::SetCursorPosX(row_column2_start);
-                ImGui::PushItemWidth(row_column2_width);
-                input_id = "##input" + std::to_string(r_idx) + std::to_string(c_idx);
-                ImGui::InputText(input_id.c_str(), row.input, 128);
-                ImGui::PopItemWidth();
-
-                ImGui::SameLine();
-                ImGui::SetCursorPosX(row_column3_start);
-                ImGui::PushItemWidth(row_column3_width);
-                input_id = "##planned" + std::to_string(r_idx) + std::to_string(c_idx);
-                ImGui::InputText(input_id.c_str(), row.planned, 128, ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_CallbackCharFilter, InputTextCallback);
-                ImGui::PopItemWidth();
-
-                ImGui::SameLine();
-                ImGui::SetCursorPosX(row_column4_start);
-                ImGui::PushItemWidth(row_column4_width);
-                input_id = "##actual" + std::to_string(r_idx) + std::to_string(c_idx);
-                ImGui::InputText(input_id.c_str(), row.actual, 128, ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_CallbackCharFilter, InputTextCallback);
-                ImGui::PopItemWidth();
-
-                ImGui::SameLine();
-                ImGui::SetCursorPosX(row_column5_start);
-                int planned = std::atoi(row.planned);
-                int actual = std::atoi(row.actual);
-                row.diff = std::to_string(planned - actual);
-                ImGui::Text(row.diff.c_str());
-
-                ImGui::SameLine();
-                ImGui::SetCursorPosX(row_column6_start);
-                ImGui::PushID(uid);
-                if(ImGui::Button("x")){
-                    print("OK\n");
-                    category.rows.erase(category.rows.begin() + r_idx);
-                    --category.row_count;
-                    for (int idx = 0; idx < category.row_count; ++idx){
-                        category.rows[idx].row_number = std::to_string(idx + 1);
-                    }
-                }
-                ImGui::PopID();
             }
             ImGui::Separator();
         }

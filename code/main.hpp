@@ -150,6 +150,7 @@ typedef struct Category{
     s32 actual;
     std::string diff;
 
+    bool draw_rows;
     u32 row_count;
 
     std::vector<Row> rows;
@@ -196,6 +197,9 @@ f32 row_column6_start = row_column5_start + row_column5_width + 5.0f;
 f32 row_column6_width = 15.0f;
 
 f32 row_column7_start = row_column6_start + row_column6_width + 5.0f;
+
+
+
 static int InputTextCallback(ImGuiInputTextCallbackData* data){
     if (data->EventChar < '0' || data->EventChar > '9')
         print("no\n");
