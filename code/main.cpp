@@ -364,7 +364,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             frame_count = 0;
         }
 
-        //print("FPS: %f - MSPF: %f - time_dt: %f - accumulator: %lu -  frame_time: %f - second_elapsed: %f - simulations: %i\n", FPS, MSPF, clock.dt, accumulator, frame_time, second_elapsed, simulations);
+        //prs32("FPS: %f - MSPF: %f - time_dt: %f - accumulator: %lu -  frame_time: %f - second_elapsed: %f - simulations: %i\n", FPS, MSPF, clock.dt, accumulator, frame_time, second_elapsed, simulations);
         String8 fps = str8_formatted(tm->frame_arena, "FPS: %.2f", FPS);
 
         // draw everything
@@ -375,29 +375,92 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
         ImGui::Begin("Draggable Rows Example");
 
-        if (ImGui::Button("+")) {
-            pm->categories_count++;
-            categories.push_back({std::to_string(pm->categories_count), "", 0, 0, ""});
-        }
+        ImGui::Columns(2);
 
+
+        ImGui::SeparatorText("Totals");
+        ImGui::Text("Budget:");
         ImGui::SameLine();
-        ImGui::SetCursorPosX(column2_start);
+        ImGui::SetCursorPosX(totals_number_start - input_padding);
+        ImGui::PushItemWidth(75);
+        if(budget[0] == 0){
+            budget[0] = '0';
+            budget[1] = '\0';
+        }
+        ImGui::InputText("##Budget", budget, 128, ImGuiInputTextFlags_CharsDecimal);
+        //ImGui::SameLine();
+        ImGui::Text("Planned: ");
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(totals_number_start);
+        ImGui::Text("%i", total_planned);
+        //ImGui::SetCursorPosX(actual_column_start);
+        ImGui::Text("Actual: ");
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(totals_number_start);
+        ImGui::Text("%i", total_actual);
+        //ImGui::SameLine();
+        //ImGui::SetCursorPosX(diff_column_start);
+        ImGui::Text("Diff: ");
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(totals_number_start);
+        ImGui::Text("%i", total_diff);
+        //ImGui::SameLine();
+        //ImGui::SetCursorPosX(plus_column_start);
+        ImGui::Text("Saved: ");
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(totals_number_start);
+        ImGui::Text("%i", total_saved);
+
+        ImGui::Dummy(ImVec2(0.0f, 20.0f));
+        ImGui::SeparatorText("Plan");
+
+
+        ImGui::SetCursorPosX(row_count_column_start);
+        ImGui::Text("#");
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(category_column_start);
         ImGui::Text("Category");
         ImGui::SameLine();
-        ImGui::SetCursorPosX(column3_start);
+        ImGui::SetCursorPosX(planned_column_start);
         ImGui::Text("Planned");
         ImGui::SameLine();
-        ImGui::SetCursorPosX(column4_start);
+        ImGui::SetCursorPosX(actual_column_start);
         ImGui::Text("Actual");
         ImGui::SameLine();
-        ImGui::SetCursorPosX(column5_start);
+        ImGui::SetCursorPosX(diff_column_start);
         ImGui::Text("Diff");
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(plus_column_start);
+        if (ImGui::Button("+")) {
+            pm->categories_count++;
+            categories.push_back({std::to_string(pm->categories_count), "", 0, 0, 0});
+        }
 
-        ImGui::Separator();
+        custom_separator();
+
+        for (s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
+            Category& category = categories[c_idx];
+            for(s32 r_idx = 0; r_idx < category.row_count; ++r_idx){
+                Row& row = category.rows[r_idx];
+
+                if(row.planned[0] == 0){
+                    row.planned[0] = '0';
+                    row.planned[1] = '\0';
+                }
+                if(row.actual[0] == 0){
+                    row.actual[0] = '0';
+                    row.actual[1] = '\0';
+                }
+            }
+        }
+        s32 planned = 0;
+        s32 actual = 0;
+        s32 diff = 0;
         for (s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
             Category& category = categories[c_idx];
 
-            ImGui::SetCursorPosX(column1_start);
+
+            ImGui::SetCursorPosX(collapse_column_start);
             ImGui::PushID(c_idx);
             if(category.draw_rows){
                 if(ImGui::Button("V")){
@@ -414,14 +477,14 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             ImGui::PopID();
             // Handle drag and drop
             if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-                ImGui::SetDragDropPayload("DRAG_ROW", &c_idx, sizeof(int));
+                ImGui::SetDragDropPayload("DRAG_ROW", &c_idx, sizeof(s32));
                 ImGui::Text("%s", category.input);
                 ImGui::EndDragDropSource();
             }
             if(ImGui::BeginDragDropTarget()) {
                 if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DRAG_ROW")) {
-                    int* payload_data = (int*)payload->Data;
-                    int from_index = *payload_data;
+                    s32* payload_data = (s32*)payload->Data;
+                    s32 from_index = *payload_data;
                     if(from_index != c_idx) {
                         std::swap(categories[from_index].row_number, categories[c_idx].row_number);
                         std::swap(categories[from_index], categories[c_idx]);
@@ -430,32 +493,38 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                 ImGui::EndDragDropTarget();
             }
 
+
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(row_count_column_start);
+            ImGui::Text("%i", category.row_count);
+
             ImGui::SameLine();
 
             std::string input_id;
-            ImGui::SetCursorPosX(column2_start);
-            ImGui::PushItemWidth(column2_width);
-            input_id = "##input" + std::to_string(c_idx);
+            ImGui::SetCursorPosX(category_column_start);
+            ImGui::PushItemWidth(category_column_width);
+            input_id = "##sub_category" + std::to_string(c_idx);
             ImGui::InputText(input_id.c_str(), category.input, 128);
             ImGui::PopItemWidth();
 
             ImGui::SameLine();
-            ImGui::SetCursorPosX(column3_start);
-            std::string planned = std::to_string(category.planned);
-            ImGui::Text(planned.c_str());
+            ImGui::SetCursorPosX(planned_column_start + input_padding);
+            std::string planned_str = std::to_string(category.planned);
+            ImGui::Text(planned_str.c_str());
 
             ImGui::SameLine();
-            ImGui::SetCursorPosX(column4_start);
-            std::string actual = std::to_string(category.actual);
-            ImGui::Text(actual.c_str());
+            ImGui::SetCursorPosX(actual_column_start + input_padding);
+            std::string actual_str = std::to_string(category.actual);
+            ImGui::Text(actual_str.c_str());
 
             ImGui::SameLine();
-            ImGui::SetCursorPosX(column5_start);
-            category.diff = std::to_string(category.planned - category.actual);
-            ImGui::Text(category.diff.c_str());
+            ImGui::SetCursorPosX(diff_column_start);
+            category.diff = category.planned - category.actual;
+            //category.diff = std::to_string(category.planned - category.actual);
+            ImGui::Text(std::to_string(category.diff).c_str());
 
             ImGui::SameLine();
-            ImGui::SetCursorPosX(column6_start);
+            ImGui::SetCursorPosX(plus_column_start);
             ImGui::PushID(c_idx);
             if (ImGui::Button("+")) {
                 category.row_count++;
@@ -465,13 +534,13 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             ImGui::PopID();
 
             ImGui::SameLine();
-            ImGui::SetCursorPosX(column7_start);
+            ImGui::SetCursorPosX(x_column_start);
             ImGui::PushID(c_idx);
             if(ImGui::Button("x")){
                 categories.erase(categories.begin() + c_idx);
                 --pm->categories_count;
                 category.row_count = 0;
-                for (int idx = 0; idx < pm->categories_count; ++idx){
+                for (s32 idx = 0; idx < pm->categories_count; ++idx){
                     categories[idx].row_number = std::to_string(idx + 1);
                 }
             }
@@ -488,21 +557,21 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                 s32 uid = std::atoi(s_id.c_str());
 
                 if(category.draw_rows){
-                    ImGui::SetCursorPosX(row_column1_start);
+                    ImGui::SetCursorPosX(row_count_column_start);
                     ImGui::PushID(uid);
                     ImGui::Button("-");
                     ImGui::PopID();
 
                     // Handle drag and drop
                     if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-                        ImGui::SetDragDropPayload("DRAG_ROW", &r_idx, sizeof(int));
+                        ImGui::SetDragDropPayload("DRAG_ROW", &r_idx, sizeof(s32));
                         ImGui::Text("%s", row.input);
                         ImGui::EndDragDropSource();
                     }
                     if(ImGui::BeginDragDropTarget()) {
                         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DRAG_ROW")) {
-                            int* payload_data = (int*)payload->Data;
-                            int from_index = *payload_data;
+                            s32* payload_data = (s32*)payload->Data;
+                            s32 from_index = *payload_data;
                             if(from_index != r_idx) {
                                 std::swap(category.rows[from_index].row_number, category.rows[r_idx].row_number);
                                 std::swap(category.rows[from_index], category.rows[r_idx]);
@@ -514,49 +583,81 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                     ImGui::SameLine();
 
                     std::string input_id;
-                    ImGui::SetCursorPosX(row_column2_start);
-                    ImGui::PushItemWidth(row_column2_width);
-                    input_id = "##input" + std::to_string(r_idx) + std::to_string(c_idx);
+                    ImGui::SetCursorPosX(category_column_start);
+                    ImGui::PushItemWidth(category_column_width);
+                    input_id = "##category" + std::to_string(r_idx) + std::to_string(c_idx);
                     ImGui::InputText(input_id.c_str(), row.input, 128);
                     ImGui::PopItemWidth();
 
                     ImGui::SameLine();
-                    ImGui::SetCursorPosX(row_column3_start);
-                    ImGui::PushItemWidth(row_column3_width);
+                    ImGui::SetCursorPosX(planned_column_start);
+                    ImGui::PushItemWidth(planned_column_width);
                     input_id = "##planned" + std::to_string(r_idx) + std::to_string(c_idx);
-                    ImGui::InputText(input_id.c_str(), row.planned, 128, ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_CallbackCharFilter, InputTextCallback);
+                    ImGui::InputText(input_id.c_str(), row.planned, 128, ImGuiInputTextFlags_CharsDecimal);
                     ImGui::PopItemWidth();
 
                     ImGui::SameLine();
-                    ImGui::SetCursorPosX(row_column4_start);
-                    ImGui::PushItemWidth(row_column4_width);
+                    ImGui::SetCursorPosX(actual_column_start);
+                    ImGui::PushItemWidth(actual_column_width);
                     input_id = "##actual" + std::to_string(r_idx) + std::to_string(c_idx);
-                    ImGui::InputText(input_id.c_str(), row.actual, 128, ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_CallbackCharFilter, InputTextCallback);
+                    ImGui::InputText(input_id.c_str(), row.actual, 128, ImGuiInputTextFlags_CharsDecimal);
                     ImGui::PopItemWidth();
 
                     ImGui::SameLine();
-                    ImGui::SetCursorPosX(row_column5_start);
-                    int planned = std::atoi(row.planned);
-                    int actual = std::atoi(row.actual);
+                    ImGui::SetCursorPosX(diff_column_start);
+                    s32 planned = std::atoi(row.planned);
+                    s32 actual = std::atoi(row.actual);
                     row.diff = std::to_string(planned - actual);
                     ImGui::Text(row.diff.c_str());
 
                     ImGui::SameLine();
-                    ImGui::SetCursorPosX(row_column6_start);
+                    //ImGui::SetCursorPosX(row_plus_column_start);
+                    ImGui::SetCursorPosX(x_column_start);
                     ImGui::PushID(uid);
                     if(ImGui::Button("x")){
-                        print("OK\n");
                         category.rows.erase(category.rows.begin() + r_idx);
                         --category.row_count;
-                        for (int idx = 0; idx < category.row_count; ++idx){
+                        for (s32 idx = 0; idx < category.row_count; ++idx){
                             category.rows[idx].row_number = std::to_string(idx + 1);
                         }
                     }
                     ImGui::PopID();
                 }
             }
-            ImGui::Separator();
+            planned += category.planned;
+            actual += category.actual;
+            diff += category.diff;
+            custom_separator();
         }
+        total_planned = planned;
+        total_actual = actual;
+        total_diff = diff;
+        total_saved = std::atoi(budget) - actual;
+
+        //########COLUMN2######################################################################
+        ImGui::NextColumn();
+        ImGui::SeparatorText("Transactions");
+
+        //update_column2_pos(ImGui::GetColumnOffset(1));
+
+        ImGui::SetCursorPosX(date_column_start + ImGui::GetColumnOffset(1));
+        ImGui::Text("Date");
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(amount_column_start + ImGui::GetColumnOffset(1));
+        ImGui::Text("Amount");
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(description_column_start + ImGui::GetColumnOffset(1));
+        ImGui::Text("Description");
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(category_select_column_start + ImGui::GetColumnOffset(1));
+        ImGui::Text("Category");
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(plus_expense_column_start + ImGui::GetColumnOffset(1));
+        if (ImGui::Button("+")) {
+            //pm->categories_count++;
+            //categories.push_back({std::to_string(pm->categories_count), "", 0, 0, 0});
+        }
+        custom_separator();
 
         ImGui::End();
 

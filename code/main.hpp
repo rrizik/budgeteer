@@ -148,7 +148,8 @@ typedef struct Category{
     char input[128];
     s32 planned;
     s32 actual;
-    std::string diff;
+    s32 diff;
+    //std::string diff;
 
     bool draw_rows;
     u32 row_count;
@@ -156,56 +157,73 @@ typedef struct Category{
     std::vector<Row> rows;
 } Category;
 
-std::vector<Category> categories;
+static std::vector<Category> categories;
+static char budget[128];
+static s32 total_planned;
+static s32 total_actual;
+static s32 total_diff;
+static s32 total_saved;
 
-f32 column1_start = 8.0f;
-f32 column1_width = 45.0f;
+static f32 input_padding = 4.0f;
+static f32 totals_number_start = 75.0f;
 
-f32 column2_start = column1_start + column1_width;
-f32 column2_width = 100.0f;
+static f32 collapse_column_start = 8.0f;
+static f32 collapse_column_width = 25.0f;
 
-f32 column3_start = column2_start + column2_width + 5.0f;
-f32 column3_width = 50.0f;
+static f32 row_count_column_start = collapse_column_start + collapse_column_width;
+static f32 row_count_column_width = 25.0f;
 
-f32 column4_start = column3_start + column3_width + 5.0f;
-f32 column4_width = 50.0f;
+static f32 category_column_start = row_count_column_start + row_count_column_width;
+static f32 category_column_width = 100.0f;
 
-f32 column5_start = column4_start + column4_width + 5.0f;
-f32 column5_width = 50.0f;
+static f32 planned_column_start = category_column_start + category_column_width + 5.0f;
+static f32 planned_column_width = 50.0f;
 
-f32 column6_start = column5_start + column5_width + 5.0f;
-f32 column6_width = 15.0f;
+static f32 actual_column_start = planned_column_start + planned_column_width + 5.0f;
+static f32 actual_column_width = 50.0f;
 
-f32 column7_start = column6_start + column6_width + 5.0f;
+static f32 diff_column_start = actual_column_start + actual_column_width + 5.0f;
+static f32 diff_column_width = 50.0f;
 
-f32 row_column1_start = 30.0f;
-f32 row_column1_width = 23.0f;
+static f32 plus_column_start = diff_column_start + diff_column_width + 5.0f;
+static f32 plus_column_width = 15.0f;
 
-f32 row_column2_start = row_column1_start + row_column1_width;
-f32 row_column2_width = 100.0f;
+static f32 x_column_start = plus_column_start + plus_column_width + 5.0f;
 
-f32 row_column3_start = row_column2_start + row_column2_width + 5.0f;
-f32 row_column3_width = 50.0f;
+static void custom_separator(f32 thickness = 1.0f) {
+    float columnWidth = ImGui::GetColumnWidth();
+    float padding = ImGui::GetStyle().WindowPadding.x;
+    float lineWidth = columnWidth - 2 * padding;
 
-f32 row_column4_start = row_column3_start + row_column3_width + 5.0f;
-f32 row_column4_width = 50.0f;
+    ImVec2 cursorPos = ImGui::GetCursorScreenPos();
+    ImGui::GetWindowDrawList()->AddLine(
+        ImVec2(cursorPos.x, cursorPos.y),
+        ImVec2(cursorPos.x + lineWidth, cursorPos.y),
+        ImGui::GetColorU32(ImGuiCol_Separator),
+        thickness
+    );
 
-f32 row_column5_start = row_column4_start + row_column4_width + 5.0f;
-f32 row_column5_width = 50.0f;
-
-f32 row_column6_start = row_column5_start + row_column5_width + 5.0f;
-f32 row_column6_width = 15.0f;
-
-f32 row_column7_start = row_column6_start + row_column6_width + 5.0f;
-
-
-
-static int InputTextCallback(ImGuiInputTextCallbackData* data){
-    if (data->EventChar < '0' || data->EventChar > '9')
-        print("no\n");
-        return 0;
-
-    return 1;
+    ImGui::Dummy(ImVec2(0.0f, thickness));
 }
+
+static f32 date_column_start = 100;
+static f32 amount_column_start = 175;
+static f32 description_column_start = 250;
+static f32 category_select_column_start = 350;
+static f32 plus_expense_column_start = 450;
+
+static void update_column2_pos(f32 pos, f32 dynamic_value){
+    date_column_start = date_column_start + dynamic_value;
+    amount_column_start = amount_column_start + dynamic_value;
+    description_column_start = description_column_start + dynamic_value;
+    category_select_column_start = category_select_column_start + dynamic_value;
+    plus_expense_column_start = plus_expense_column_start + dynamic_value;
+}
+
+typedef struct Transaction{
+    s32 amount;
+    char description[128];
+
+} Transation;
 
 #endif
