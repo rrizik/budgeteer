@@ -1,5 +1,5 @@
 @echo off
 
 pushd ..\build
-call win_platform.exe
+call main.exe
 popd

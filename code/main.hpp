@@ -59,8 +59,8 @@ typedef struct Memory{
 global Memory memory;
 static void memory_init();
 
-#define SCREEN_WIDTH 1280
-#define SCREEN_HEIGHT 720
+#define SCREEN_WIDTH 1920
+#define SCREEN_HEIGHT 1080
 struct Window{
     s32 width;
     s32 height;
@@ -117,6 +117,8 @@ typedef struct PermanentMemory{
     u32 categories_count;
     u32 categories_index;
     String8 categories[CATEGORIES_MAX];
+
+    u32 transactions_count;
 } PermanentMemory, State;
 global PermanentMemory* pm;
 
@@ -136,7 +138,7 @@ f32 text_padding = 20;
 #include <vector>
 
 typedef struct Row {
-    std::string row_number;
+    //std::string row_number;
     char input[128];
     char planned[128];
     char actual[128];
@@ -144,7 +146,7 @@ typedef struct Row {
 } Row;
 
 typedef struct Category{
-    std::string row_number;
+    //std::string row_number;
     char input[128];
     s32 planned;
     s32 actual;
@@ -221,9 +223,24 @@ static void update_column2_pos(f32 pos, f32 dynamic_value){
 }
 
 typedef struct Transaction{
-    s32 amount;
+    u32 date;
+    u32 amount;
     char description[128];
+    char category[128];
 
 } Transation;
+
+static std::vector<Transaction> transactions;
+
+static f32 get_ui_right_x(){
+    ImVec2 window_pos = ImGui::GetWindowPos();
+
+// Get the size of the ImGui window
+    ImVec2 window_size = ImGui::GetWindowSize();
+
+// Calculate the X position of the right side of the window
+    f32 right_side = window_pos.x + window_size.x;
+    return(right_side);
+}
 
 #endif
