@@ -137,21 +137,24 @@ f32 text_padding = 20;
 #include <string>
 #include <vector>
 
+static char budget[128];
+static s32 total_planned;
+static s32 total_actual;
+static s32 total_diff;
+static s32 total_saved;
+
 typedef struct Row {
-    //std::string row_number;
-    char input[128];
+    char name[128];
     char planned[128];
     char actual[128];
     std::string diff;
 } Row;
 
 typedef struct Category{
-    //std::string row_number;
-    char input[128];
+    char name[128];
     s32 planned;
     s32 actual;
     s32 diff;
-    //std::string diff;
 
     bool draw_rows;
     u32 row_count;
@@ -160,11 +163,6 @@ typedef struct Category{
 } Category;
 
 static std::vector<Category> categories;
-static char budget[128];
-static s32 total_planned;
-static s32 total_actual;
-static s32 total_diff;
-static s32 total_saved;
 
 static f32 input_padding = 4.0f;
 static f32 totals_number_start = 75.0f;
@@ -208,13 +206,18 @@ static void custom_separator(f32 thickness = 1.0f) {
     ImGui::Dummy(ImVec2(0.0f, thickness));
 }
 
-static f32 date_column_start = 100;
-static f32 amount_column_start = 175;
-static f32 description_column_start = 250;
-static f32 category_select_column_start = 350;
-static f32 plus_expense_column_start = 450;
+static f32 date_column_start = 50;
+static f32 date_column_width = 80;
+static f32 amount_column_start = 150;
+static f32 amount_column_width = 75;
+static f32 description_column_start = 245;
+static f32 description_column_width = 160;
+static f32 category_select_column_start = 425;
+static f32 category_select_column_width = 100;
+static f32 plus_expense_column_start = 520;
+//static f32 plus_expense_column_width = 75;
 
-static void update_column2_pos(f32 pos, f32 dynamic_value){
+static void update_column2_pos(f32 dynamic_value){
     date_column_start = date_column_start + dynamic_value;
     amount_column_start = amount_column_start + dynamic_value;
     description_column_start = description_column_start + dynamic_value;
@@ -223,24 +226,42 @@ static void update_column2_pos(f32 pos, f32 dynamic_value){
 }
 
 typedef struct Transaction{
-    u32 date;
-    u32 amount;
+    char date[128];
+    char amount[128];
     char description[128];
-    char category[128];
-
+    s32 category_option;
 } Transation;
 
 static std::vector<Transaction> transactions;
+static std::vector<std::string> category_options;
+static std::vector<int> free_idx;
 
 static f32 get_ui_right_x(){
     ImVec2 window_pos = ImGui::GetWindowPos();
 
-// Get the size of the ImGui window
     ImVec2 window_size = ImGui::GetWindowSize();
 
-// Calculate the X position of the right side of the window
     f32 right_side = window_pos.x + window_size.x;
     return(right_side);
 }
+
+static void
+char_copy(char* left, char* right){
+    u32 count = 0;
+    while(*left){
+        *right = *left;
+        right++;
+        left++;
+        count++;
+    }
+    left = left - count;
+    right = right - count;
+}
+
+//static f32
+//calc_wrapped_text_height(const char* text, float wrap_width) {
+//    ImGuiWindow* window = ImGui::GetCurrentWindow();
+//    return ImGui::CalcTextSize(text, 0, true, wrap_width).y + window->DC.CurrLineTextBaseOffset;
+//}
 
 #endif

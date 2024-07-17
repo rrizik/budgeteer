@@ -287,6 +287,9 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             str->size = 128;
         }
 
+        std::string dummy = " ";
+        category_options.push_back(dummy);
+
         //for(u32 i=0; i<1024; ++i){
         //    Row* row = rows + i;
         //    row->text.str = push_array(&pm->arena, u8, 128);
@@ -374,17 +377,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
 
         ImGui::Begin("Draggable Rows Example");
-        //ImGui::PushItemWidth(50);
-        //if (ImGui::TreeNode(" "))
-        //{
-        //    ImGui::Text("Expanded content goes here");
-        //    ImGui::Button("Button 1");
-        //    ImGui::Button("Button 2");
-        //    ImGui::TreePop();
-        //}
 
-        float leftX = ImGui::GetCursorPosX();
-        print("%f\n", leftX);
         ImGui::Columns(2);
 
 
@@ -421,6 +414,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         else{
             ImGui::Text("%i", total_diff);
         }
+
         //ImGui::SameLine();
         //ImGui::SetCursorPosX(plus_column_start);
         ImGui::Text("Saved: ");
@@ -438,8 +432,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         ImGui::Dummy(ImVec2(0.0f, 20.0f));
         ImGui::SeparatorText("Plan");
 
-
-        ImGui::SetCursorPosX(row_count_column_start);
+        ImGui::SetCursorPosX(row_count_column_start + input_padding);
         ImGui::Text("#");
         ImGui::SameLine();
         ImGui::SetCursorPosX(category_column_start);
@@ -503,7 +496,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             // Handle drag and drop
             if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
                 ImGui::SetDragDropPayload("DRAG_ROW", &c_idx, sizeof(s32));
-                ImGui::Text("%s", category.input);
+                ImGui::Text("%s", category.name);
                 ImGui::EndDragDropSource();
             }
             if(ImGui::BeginDragDropTarget()) {
@@ -520,7 +513,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
 
             ImGui::SameLine();
-            ImGui::SetCursorPosX(row_count_column_start);
+            ImGui::SetCursorPosX(row_count_column_start + input_padding);
             ImGui::Text("%i", category.row_count);
 
             ImGui::SameLine();
@@ -529,7 +522,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             ImGui::SetCursorPosX(category_column_start);
             ImGui::PushItemWidth(category_column_width);
             input_id = "##sub_category" + std::to_string(c_idx);
-            ImGui::InputText(input_id.c_str(), category.input, 128);
+            ImGui::InputText(input_id.c_str(), category.name, 128);
             ImGui::PopItemWidth();
 
             ImGui::SameLine();
@@ -597,7 +590,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                     // Handle drag and drop
                     if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
                         ImGui::SetDragDropPayload("DRAG_ROW", &r_idx, sizeof(s32));
-                        ImGui::Text("%s", row.input);
+                        ImGui::Text("%s", row.name);
                         ImGui::EndDragDropSource();
                     }
                     if(ImGui::BeginDragDropTarget()) {
@@ -618,7 +611,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                     ImGui::SetCursorPosX(category_column_start);
                     ImGui::PushItemWidth(category_column_width);
                     input_id = "##category" + std::to_string(r_idx) + std::to_string(c_idx);
-                    ImGui::InputText(input_id.c_str(), row.input, 128);
+                    ImGui::InputText(input_id.c_str(), row.name, 128);
                     ImGui::PopItemWidth();
 
                     ImGui::SameLine();
@@ -680,74 +673,168 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
         //ImGui::GetColumnOffset(1)
         //ImGui::PushItemWidth(400);
-        f32 x = get_ui_right_x();
-        f32 width = get_ui_right_x() - ImGui::GetColumnOffset(1) - 50;
-        if (ImGui::BeginTable("MyTable", 4, ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable, ImVec2(width, 0.0f))){
-            ImGui::TableSetupColumn("Date");
-            ImGui::TableSetupColumn("Amount");
-            ImGui::TableSetupColumn("Description");
-            ImGui::TableSetupColumn("Category");
+        //f32 x = get_ui_right_x();
+        //f32 width = get_ui_right_x() - ImGui::GetColumnOffset(1) - 50;
+        //if (ImGui::BeginTable("MyTable", 4, ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable, ImVec2(width, 0.0f))){
+        //    ImGui::TableSetupColumn("Date");
+        //    ImGui::TableSetupColumn("Amount");
+        //    ImGui::TableSetupColumn("Description");
+        //    ImGui::TableSetupColumn("Category");
 
-            ImGui::TableHeadersRow();
+        //    ImGui::TableHeadersRow();
 
-            static int draggedIndex = -1;
+        //    static int draggedIndex = -1;
 
-            for(s32 i=0; i < pm->transactions_count; ++i){
-                Transaction& transaction = transactions[i];
-                ImGui::TableNextRow();
+        //    for(s32 i=0; i < pm->transactions_count; ++i){
+        //        Transaction& transaction = transactions[i];
+        //        ImGui::TableNextRow();
 
-                ImGui::TableSetColumnIndex(0);
-                ImGui::Text("%i", transaction.date);
-                ImGui::TableSetColumnIndex(1);
-                ImGui::Text("%i", transaction.amount);
-                ImGui::TableSetColumnIndex(2);
-                ImGui::Text("%s", transaction.description);
-                ImGui::TableSetColumnIndex(3);
-                ImGui::Text("%s", transaction.category);
+        //        ImGui::TableSetColumnIndex(0);
+        //        ImGui::Text("%i", transaction.date);
+        //        ImGui::TableSetColumnIndex(1);
+        //        ImGui::Text("%i", transaction.amount);
+        //        ImGui::TableSetColumnIndex(2);
+        //        ImGui::Text("%s", transaction.description);
+        //        ImGui::TableSetColumnIndex(3);
+        //        ImGui::Text("%s", transaction.category);
 
+        //    }
+
+        //    ImGui::EndTable();
+        //}
+
+        //update_column2_pos(ImGui::GetColumnOffset(1));
+
+        category_options.clear();
+        std::vector<std::string> tmp;
+        for(s32 idx_c = 0; idx_c < pm->categories_count; ++idx_c){
+            Category& category = categories[idx_c];
+            for(s32 idx_r = 0; idx_r < category.row_count; ++idx_r){
+                Row& row = category.rows[idx_r];
+                std::string row_name(row.name);
+                std::string category_name(category.name);
+                std::string result = category_name + "-" + row_name;
+                if(row_name.size() && category_name.size()){
+
+                    category_options.push_back(result);
+                    //auto it = std::find(category_options.begin(), category_options.end(), result);
+                    //if(it == category_options.end()){
+                    //}
+                }
             }
+        }
 
-            ImGui::EndTable();
-        }
+        ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + date_column_start - 30 + input_padding);
+        ImGui::Text("#");
+
         ImGui::SameLine();
-        ImGui::SetCursorPosX(get_ui_right_x() - 35);
+        ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + date_column_start);
+        ImGui::Text("Date");
+
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + amount_column_start);
+        ImGui::Text("Amount");
+
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + description_column_start);
+        ImGui::Text("Description");
+
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + category_select_column_start);
+        ImGui::Text("Category");
+
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + plus_expense_column_start);
         if (ImGui::Button("+##add_transaction_button")) {
+            if(pm->transactions_count == 0){
+                transactions.push_back({"01/01/2024", "0", "", 0});
+            }
+            else{
+                Transaction last = transactions[pm->transactions_count - 1];
+                Transaction new_trans = {"", "0", "", 0};
+                char_copy(last.date, new_trans.date);
+                transactions.push_back(new_trans);
+            }
             pm->transactions_count++;
-            transactions.push_back({pm->transactions_count, pm->transactions_count, "boop", "boop"});
         }
+        custom_separator();
 
         for(s32 i=0; i < pm->transactions_count; ++i){
-            ImGui::SetCursorPosX(get_ui_right_x() - 35);
+            Transaction& trans = transactions[i];
+
+            ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + date_column_start - 30);
+            std::string num_button = std::to_string(i) + "##num_button";
+            ImGui::Button(num_button.c_str());
+            if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)){
+                ImGui::SetDragDropPayload("DRAG_ROW", &i, sizeof(s32));
+                ImGui::Text("%i", i);
+                ImGui::EndDragDropSource();
+            }
+            if(ImGui::BeginDragDropTarget()){
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DRAG_ROW")){
+                    s32* payload_data = (s32*)payload->Data;
+                    s32 from_index = *payload_data;
+                    if(from_index != i){
+                        std::swap(transactions[from_index], transactions[i]);
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+
+            ImGui::SameLine();
+            std::string unique_id;
+            ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + date_column_start);
+            ImGui::PushItemWidth(date_column_width);
+            unique_id = "##date" + std::to_string(i);
+            ImGui::InputText(unique_id.c_str(), trans.date, 128, ImGuiInputTextFlags_CharsDecimal);
+            ImGui::PopItemWidth();
+
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + amount_column_start);
+            ImGui::PushItemWidth(amount_column_width);
+            unique_id = "##amount" + std::to_string(i);
+            ImGui::InputText(unique_id.c_str(), trans.amount, 128, ImGuiInputTextFlags_CharsDecimal);
+            ImGui::PopItemWidth();
+
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + description_column_start);
+            ImGui::PushItemWidth(description_column_width);
+            unique_id = "##description" + std::to_string(i);
+            ImGui::InputText(unique_id.c_str(), trans.description, 128);
+
+            //ImGui::InputTextMultiline(unique_id.c_str(), trans.description, 128, ImVec2(description_column_width, ImGui::GetTextLineHeight() * 2), ImGuiInputTextFlags_AllowTabInput | ImGuiInputTextFlags_NoHorizontalScroll);
+
+            ImGui::PopItemWidth();
+
+            ImGui::SameLine();
+            ImGui::PushItemWidth(category_select_column_width);
+            std::string combo_preview_value;
+            combo_preview_value = category_options[trans.category_option].c_str();
+            unique_id = "##category_select" + std::to_string(i);
+            if (ImGui::BeginCombo(unique_id.c_str(), combo_preview_value.c_str())){
+                for (int n = 0; n < category_options.size(); n++){
+                    const bool is_selected = (trans.category_option == n);
+                    if (ImGui::Selectable(category_options[n].c_str(), is_selected)){
+                        trans.category_option = n;
+                    }
+
+                    if (is_selected){
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::PopItemWidth();
+
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + plus_expense_column_start);
             std::string deleteButtonLabel = "x##delete_button_" + std::to_string(i);
             if (ImGui::Button(deleteButtonLabel.c_str())) {
                 pm->transactions_count--;
                 transactions.erase(transactions.begin() + i);
             }
         }
-
-        //update_column2_pos(ImGui::GetColumnOffset(1));
-
-        //ImGui::SetCursorPosX(date_column_start + ImGui::GetColumnOffset(1));
-        //ImGui::Text("Date");
-        //ImGui::SameLine();
-        //ImGui::SetCursorPosX(amount_column_start + ImGui::GetColumnOffset(1));
-        //ImGui::Text("Amount");
-        //ImGui::SameLine();
-        //ImGui::SetCursorPosX(description_column_start + ImGui::GetColumnOffset(1));
-        //ImGui::Text("Description");
-        //ImGui::SameLine();
-        //ImGui::SetCursorPosX(category_select_column_start + ImGui::GetColumnOffset(1));
-        //ImGui::Text("Category");
-        //ImGui::SameLine();
-        //ImGui::SetCursorPosX(plus_expense_column_start + ImGui::GetColumnOffset(1));
-        //if (ImGui::Button("+")) {
-        //    //pm->categories_count++;
-        //    //categories.push_back({std::to_string(pm->categories_count), "", 0, 0, 0});
-        //}
-        //custom_separator();
-
         ImGui::End();
-
 
 
         ImGui::ShowDemoWindow(); // Show demo window! :)
