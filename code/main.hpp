@@ -38,6 +38,9 @@
 #include "rect.cpp"
 #include "entity.cpp"
 
+#include <string>
+#include <vector>
+
 static String8 build_path;
 static String8 fonts_path;
 static String8 shaders_path;
@@ -79,75 +82,11 @@ static void init_paths(Arena* arena);
 s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 window_type);
 static LRESULT win_message_handler_callback(HWND hwnd, u32 message, u64 w_param, s64 l_param);
 
-#define MAX_LEVELS 3
-#define MAX_LIVES 3
-#define WIN_SCORE 3000
-#define ENTITIES_MAX 4096
-typedef struct PermanentMemory{
-    Arena arena;
-    u32 game_mode; // GameMode
-
-    Entity entities[ENTITIES_MAX];
-    u32 entities_count;
-
-    u32 generation[ENTITIES_MAX];
-    u32 free_entities[ENTITIES_MAX];
-    u32 free_entities_at;
-
-    Entity* ship;
-    bool ship_loaded;
-    s32 score;
-    s32 lives;
-
-    Level levels[MAX_LEVELS];
-    s32 level_index;
-    Level* current_level;
-    Font* font;
-
-    u32 current_font;
-    f64 spawn_t;
-
-#define SUB_CATEGORIES_MAX 1024
-    u32 sub_categories_count;
-    u32 sub_categories_index;
-    String8 sub_categories[SUB_CATEGORIES_MAX];
-    bool selected_sub_categories[1024];
-
-#define CATEGORIES_MAX 1024
-    u32 categories_count;
-    u32 categories_index;
-    String8 categories[CATEGORIES_MAX];
-
-    u32 transactions_count;
-} PermanentMemory, State;
-global PermanentMemory* pm;
-
-typedef struct TransientMemory{
-    Arena arena;
-    Arena *frame_arena;
-    Arena *render_command_arena;
-    Arena *asset_arena;
-
-    Assets assets;
-} TransientMemory;
-global TransientMemory* tm;
-
-f32 text_padding = 20;
-
-#include <string>
-#include <vector>
-
-static char budget[128];
-static s32 total_planned;
-static s32 total_actual;
-static s32 total_diff;
-static s32 total_saved;
-
 typedef struct Row {
     char name[128];
     char planned[128];
-    char actual[128];
-    std::string diff;
+    s32 actual;
+    s32 diff;
 } Row;
 
 typedef struct Category{
@@ -162,7 +101,105 @@ typedef struct Category{
     std::vector<Row> rows;
 } Category;
 
+s32 counter = 1;
+s32 r_counter = 1;
+typedef struct RRow {
+    RRow* next;
+    RRow* prev;
+    s32 v;
+    //char name[128];
+    //char planned[128];
+    //s32 actual;
+    //s32 diff;
+} RRow;
+
+typedef struct CCategory{
+    CCategory* next;
+    CCategory* prev;
+    s32 v;
+
+    RRow rows;
+    //char name[128];
+    //s32 planned;
+    //s32 actual;
+    //s32 diff;
+
+    //bool draw_rows;
+    //u32 row_count;
+
+    //std::vector<Row> rows;
+} CCategory;
+
+#define MAX_LEVELS 3
+#define MAX_LIVES 3
+#define WIN_SCORE 3000
+#define ENTITIES_MAX 4096
+typedef struct PermanentMemory{
+    Arena arena;
+    Font* font;
+    u32 game_mode; // GameMode
+    Entity entities[ENTITIES_MAX];
+    u32 entities_count;
+    u32 generation[ENTITIES_MAX];
+    u32 free_entities[ENTITIES_MAX];
+    u32 free_entities_at;
+    Entity* ship;
+    bool ship_loaded;
+    s32 score;
+    s32 lives;
+    Level levels[MAX_LEVELS];
+    s32 level_index;
+    Level* current_level;
+    f64 spawn_t;
+
+
+    u32 current_font;
+
+#define CATEGORIES_MAX 128
+    u32 categories_count;
+    u32 categories_index;
+    CCategory categories;
+
+#define SUB_CATEGORIES_MAX 1024
+    u32 sub_categories_count;
+    u32 sub_categories_index;
+    String8 sub_categories[SUB_CATEGORIES_MAX];
+    bool selected_sub_categories[1024];
+
+    u32 transactions_count;
+} PermanentMemory, State;
+global PermanentMemory* pm;
+
+typedef struct TransientMemory{
+    Arena arena;
+    Arena *frame_arena;
+    Arena *render_command_arena;
+    Arena *options_arena;
+    Assets assets;
+
+} TransientMemory;
+global TransientMemory* tm;
+
+f32 text_padding = 20;
+
+static char budget[128];
+static s32 total_planned;
+static s32 total_actual;
+static s32 total_diff;
+static s32 total_saved;
+
 static std::vector<Category> categories;
+static std::vector<s32> category_idx;
+
+typedef struct Transaction{
+    char date[128];
+    char amount[128];
+    char description[128];
+    s32 category_option;
+} Transation;
+
+static std::vector<Transaction> transactions;
+String8* category_options;
 
 static f32 input_padding = 4.0f;
 static f32 totals_number_start = 75.0f;
@@ -217,33 +254,15 @@ static f32 category_select_column_width = 100;
 static f32 plus_expense_column_start = 520;
 //static f32 plus_expense_column_width = 75;
 
-static void update_column2_pos(f32 dynamic_value){
-    date_column_start = date_column_start + dynamic_value;
-    amount_column_start = amount_column_start + dynamic_value;
-    description_column_start = description_column_start + dynamic_value;
-    category_select_column_start = category_select_column_start + dynamic_value;
-    plus_expense_column_start = plus_expense_column_start + dynamic_value;
-}
 
-typedef struct Transaction{
-    char date[128];
-    char amount[128];
-    char description[128];
-    s32 category_option;
-} Transation;
-
-static std::vector<Transaction> transactions;
-static std::vector<std::string> category_options;
-static std::vector<int> free_idx;
-
-static f32 get_ui_right_x(){
-    ImVec2 window_pos = ImGui::GetWindowPos();
-
-    ImVec2 window_size = ImGui::GetWindowSize();
-
-    f32 right_side = window_pos.x + window_size.x;
-    return(right_side);
-}
+//static f32 get_ui_right_x(){
+//    ImVec2 window_pos = ImGui::GetWindowPos();
+//
+//    ImVec2 window_size = ImGui::GetWindowSize();
+//
+//    f32 right_side = window_pos.x + window_size.x;
+//    return(right_side);
+//}
 
 static void
 char_copy(char* left, char* right){
@@ -257,11 +276,5 @@ char_copy(char* left, char* right){
     left = left - count;
     right = right - count;
 }
-
-//static f32
-//calc_wrapped_text_height(const char* text, float wrap_width) {
-//    ImGuiWindow* window = ImGui::GetCurrentWindow();
-//    return ImGui::CalcTextSize(text, 0, true, wrap_width).y + window->DC.CurrLineTextBaseOffset;
-//}
 
 #endif
