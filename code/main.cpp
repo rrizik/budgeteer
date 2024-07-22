@@ -281,14 +281,14 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         entities_clear();
 
         // UI INIT
-        dll_clear(&pm->categories);
-        pm->sub_categories_count = 1;
+        //dll_clear(pm->categories);
+        //pm->total_rows_count = 1;
 
-        for(u32 i=0; i<SUB_CATEGORIES_MAX; ++i){
-            String8* str = pm->sub_categories + i;
-            str->str = push_array(&pm->arena, u8, 128);
-            str->size = 128;
-        }
+        //for(u32 i=0; i<SUB_CATEGORIES_MAX; ++i){
+        //    String8* str = pm->sub_categories + i;
+        //    str->str = push_array(&pm->arena, u8, 128);
+        //    str->size = 128;
+        //}
 
         category_options = push_array(tm->options_arena, String8, 128);
         for(s32 i=0; i < 128; ++i){
@@ -422,14 +422,16 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         ImGui::SetCursorPosX(plus_column_start);
         if (ImGui::Button("+##add_category_button")) {
             CCategory* c = push_struct(&pm->arena, CCategory);
-            c->v = counter++;
-            dll_push_back(&pm->categories, c);
-            dll_clear(&c->rows);
+            dll_clear(c);
+            if(pm->categories == 0){
+                pm->categories = c;
+            }
+            else{
+                dll_push_back(pm->categories, c);
+            }
             pm->categories_count++;
 
-
-            category_idx.push_back(pm->categories_count);
-            categories.push_back({"", 0, 0, 0});
+            categories.push_back({"\0", 0, 0, 0});
         }
 
         custom_separator();
@@ -445,14 +447,14 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                 }
             }
         }
+        print("%i\n", pm->arena.at);
 
         s32 planned = 0;
         s32 actual = 0;
         s32 diff = 0;
         //#####PLAN######
-        CCategory* c = &pm->categories;
+        CCategory* c = pm->categories;
         for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
-            c = c->next;
             Category& category = categories[c_idx];
 
             ImGui::SetCursorPosX(collapse_column_start);
@@ -527,10 +529,15 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             ImGui::PushID(c_idx);
             if (ImGui::Button("+##add_row_button")) {
                 RRow* r = push_struct(&pm->arena, RRow);
-                r->v = r_counter++;
-                dll_push_back(&c->rows, r);
+                dll_clear(r);
+                if(c->rows == 0){
+                    c->rows = r;
+                }
+                else{
+                    dll_push_back(c->rows, r);
+                }
+                pm->total_rows_count++;
 
-                pm->sub_categories_count++;
                 category.row_count++;
                 category.rows.push_back({"", "", 0, 0});
                 category.draw_rows = true;
@@ -545,7 +552,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
 
 
-                pm->sub_categories_count -= category.row_count;
+                pm->total_rows_count -= category.row_count;
                 --pm->categories_count;
                 category.row_count = 0;
                 categories.erase(categories.begin() + c_idx);
@@ -553,11 +560,10 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             ImGui::PopID();
 
 
-            RRow* r = &c->rows;
+            RRow* r = c->rows;
             category.planned = 0;
             category.actual = 0;
             for(s32 r_idx = 0; r_idx < category.row_count; ++r_idx){
-                r = r->next;
                 Row& row = category.rows[r_idx];
 
                 category.planned += std::atoi(row.planned);
@@ -633,15 +639,18 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
                         category.rows.erase(category.rows.begin() + r_idx);
                         --category.row_count;
-                        --pm->sub_categories_count;
+                        --pm->total_rows_count;
                     }
                     ImGui::PopID();
                 }
+                r = r->next;
             }
             planned += category.planned;
             actual += category.actual;
             diff += category.diff;
             custom_separator();
+
+            c = c->next;
         }
         total_planned = planned;
         total_actual = actual;
@@ -649,8 +658,8 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         total_saved = std::atoi(budget) - actual;
 
         //ScratchArena scratch = begin_scratch();
-        //category_options = push_array(scratch.arena, String8, pm->sub_categories_count + 1);
-        //for(s32 i=0; i < pm->sub_categories_count + 1; ++i){
+        //category_options = push_array(scratch.arena, String8, pm->total_rows_count + 1);
+        //for(s32 i=0; i < pm->total_rows_count + 1; ++i){
         //    String8* opt = category_options + i;
         //    opt->str = push_array(scratch.arena, u8, 128);
         //}
@@ -798,17 +807,12 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             unique_id = "##category_select" + std::to_string(i);
             String8* preview_option = category_options + trans.category_option;
             if (ImGui::BeginCombo(unique_id.c_str(), (char*)preview_option->str)){
-                for (int n = 0; n < pm->sub_categories_count; n++){
+                for (int n = 0; n < pm->total_rows_count; n++){
                     const bool is_selected = (trans.category_option == n);
 
                     String8* selected_option = category_options + n;
                     if(selected_option->size == 0){
-                        if(is_selected){
-                            trans.category_option = 0;
-                        }
-                        else{
-                            continue;
-                        }
+                        continue;
                     }
 
                     if (ImGui::Selectable((char*)selected_option->str, is_selected)){

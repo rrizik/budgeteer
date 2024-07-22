@@ -82,7 +82,7 @@ static void init_paths(Arena* arena);
 s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 window_type);
 static LRESULT win_message_handler_callback(HWND hwnd, u32 message, u64 w_param, s64 l_param);
 
-typedef struct Row {
+typedef struct Row{
     char name[128];
     char planned[128];
     s32 actual;
@@ -101,12 +101,11 @@ typedef struct Category{
     std::vector<Row> rows;
 } Category;
 
-s32 counter = 1;
-s32 r_counter = 1;
-typedef struct RRow {
+s32 counter = 0;
+s32 r_counter = 0;
+typedef struct RRow{
     RRow* next;
     RRow* prev;
-    s32 v;
     //char name[128];
     //char planned[128];
     //s32 actual;
@@ -116,18 +115,16 @@ typedef struct RRow {
 typedef struct CCategory{
     CCategory* next;
     CCategory* prev;
-    s32 v;
+    RRow* rows;
 
-    RRow rows;
     //char name[128];
-    //s32 planned;
-    //s32 actual;
-    //s32 diff;
+    String8 name;
+    s32 planned;
+    s32 actual;
+    s32 diff;
 
-    //bool draw_rows;
-    //u32 row_count;
-
-    //std::vector<Row> rows;
+    u32 rows_count;
+    bool draw_rows;
 } CCategory;
 
 #define MAX_LEVELS 3
@@ -136,6 +133,13 @@ typedef struct CCategory{
 #define ENTITIES_MAX 4096
 typedef struct PermanentMemory{
     Arena arena;
+
+    u32 total_rows_count;
+    u32 categories_count;
+    CCategory* categories;
+
+    u32 transactions_count;
+
     Font* font;
     u32 game_mode; // GameMode
     Entity entities[ENTITIES_MAX];
@@ -151,22 +155,7 @@ typedef struct PermanentMemory{
     s32 level_index;
     Level* current_level;
     f64 spawn_t;
-
-
     u32 current_font;
-
-#define CATEGORIES_MAX 128
-    u32 categories_count;
-    u32 categories_index;
-    CCategory categories;
-
-#define SUB_CATEGORIES_MAX 1024
-    u32 sub_categories_count;
-    u32 sub_categories_index;
-    String8 sub_categories[SUB_CATEGORIES_MAX];
-    bool selected_sub_categories[1024];
-
-    u32 transactions_count;
 } PermanentMemory, State;
 global PermanentMemory* pm;
 
@@ -189,7 +178,6 @@ static s32 total_diff;
 static s32 total_saved;
 
 static std::vector<Category> categories;
-static std::vector<s32> category_idx;
 
 typedef struct Transaction{
     char date[128];
