@@ -106,10 +106,11 @@ s32 r_counter = 0;
 typedef struct RRow{
     RRow* next;
     RRow* prev;
-    //char name[128];
-    //char planned[128];
-    //s32 actual;
-    //s32 diff;
+
+    char name[128];
+    char planned[128];
+    s32 actual;
+    s32 diff;
 } RRow;
 
 typedef struct CCategory{
@@ -117,15 +118,26 @@ typedef struct CCategory{
     CCategory* prev;
     RRow* rows;
 
-    //char name[128];
-    String8 name;
+    char name[128];
     s32 planned;
     s32 actual;
     s32 diff;
 
-    u32 rows_count;
+    u32 row_count;
     bool draw_rows;
 } CCategory;
+
+typedef struct Transaction{
+    Transaction* next;
+    Transaction* prev;
+
+    char date[128];
+    char amount[128];
+    char description[128];
+    s32 category_option;
+} Transation;
+
+static std::vector<Transaction> transactions;
 
 #define MAX_LEVELS 3
 #define MAX_LIVES 3
@@ -133,12 +145,18 @@ typedef struct CCategory{
 #define ENTITIES_MAX 4096
 typedef struct PermanentMemory{
     Arena arena;
+    PoolArena* category_pool;
+    PoolArena* row_pool;
+    PoolArena* transaction_pool;
 
     u32 total_rows_count;
     u32 categories_count;
-    CCategory* categories;
-
     u32 transactions_count;
+
+    CCategory* categories;
+    Transaction* transactions;
+
+
 
     Font* font;
     u32 game_mode; // GameMode
@@ -177,16 +195,6 @@ static s32 total_actual;
 static s32 total_diff;
 static s32 total_saved;
 
-static std::vector<Category> categories;
-
-typedef struct Transaction{
-    char date[128];
-    char amount[128];
-    char description[128];
-    s32 category_option;
-} Transation;
-
-static std::vector<Transaction> transactions;
 String8* category_options;
 
 static f32 input_padding = 4.0f;
