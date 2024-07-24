@@ -102,7 +102,7 @@ static LRESULT win_message_handler_callback(HWND hwnd, u32 message, u64 w_param,
             event.mouse_pos.x = (s32)(s16)(l_param & 0xFFFF);
             event.mouse_pos.y = (s32)(s16)(l_param >> 16);
 
-            // todo: dx/y is probably wrong, not working as expected
+            // todo: dx/dy is probably wrong, not working as expected
             s32 dx = event.mouse_pos.x - (SCREEN_WIDTH/2);
             s32 dy = event.mouse_pos.y - (SCREEN_HEIGHT/2);
             event.mouse_dx = (f32)dx / (f32)(SCREEN_WIDTH/2);
@@ -293,18 +293,6 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         // setup free entities array in reverse order
         entities_clear();
 
-        // todo: remove this
-        // UI INIT
-        //dll_clear(pm->categories);
-        //pm->total_rows_count = 1;
-
-        // todo: remove this?
-        //for(u32 i=0; i<SUB_CATEGORIES_MAX; ++i){
-        //    String8* str = pm->sub_categories + i;
-        //    str->str = push_array(&pm->arena, u8, 128);
-        //    str->size = 128;
-        //}
-
         // todo: look at this
         //category_options = push_array(tm->options_arena, String8, 128);
         //for(s32 i=0; i < 128; ++i){
@@ -447,24 +435,27 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
         custom_separator();
 
-        //todo: FIX THIS
-        //for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
-        //    Category& category = categories[c_idx];
-        //    for(s32 r_idx = 0; r_idx < category.row_count; ++r_idx){
-        //        Row& row = category.rows[r_idx];
+        //note: popluate with 0's
+        CCategory* category = pm->categories;
+        for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
+            category = category->next;
 
-        //        if(row.planned[0] == 0){
-        //            row.planned[0] = '0';
-        //            row.planned[1] = '\0';
-        //        }
-        //    }
-        //}
+            RRow* row = category->rows;
+            for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
+                row = row->next;
+
+                if(row->planned[0] == 0){
+                    row->planned[0] = '0';
+                    row->planned[1] = '\0';
+                }
+            }
+        }
 
         s32 planned = 0;
         s32 actual = 0;
         s32 diff = 0;
         //#####PLAN######
-        CCategory* category = pm->categories;
+        category = pm->categories;
         for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
             category = category->next;
 
@@ -491,9 +482,13 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             if(ImGui::BeginDragDropTarget()) {
                 if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DRAG_ROW")) {
                     s32* payload_data = (s32*)payload->Data;
-                    s32 from_index = *payload_data;
-                    if(from_index != c_idx) {
-                        //std::swap(categories[from_index], categories[c_idx]);
+                    s32 from_idx = *payload_data;
+                    if(from_idx != c_idx) {
+                        CCategory* c = pm->categories;
+                        for(s32 i=0; i <= from_idx; ++i){
+                            c = c->next;
+                        }
+                        dll_swap(c, category, CCategory);
                     }
                 }
                 ImGui::EndDragDropTarget();
@@ -509,7 +504,6 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             ImGui::SetCursorPosX(category_column_start);
             ImGui::PushItemWidth(category_column_width);
             input_id = "##sub_category" + std::to_string(c_idx);
-            print("%s\n", input_id);
             ImGui::InputText(input_id.c_str(), category->name, 128, ImGuiInputTextFlags_AutoSelectAll);
             ImGui::PopItemWidth();
 
@@ -586,9 +580,13 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                     if(ImGui::BeginDragDropTarget()) {
                         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DRAG_ROW")) {
                             s32* payload_data = (s32*)payload->Data;
-                            s32 from_index = *payload_data;
-                            if(from_index != r_idx) {
-                                //std::swap(category.rows[from_index], category.rows[r_idx]);
+                            s32 from_idx = *payload_data;
+                            if(from_idx != r_idx) {
+                                RRow* r = category->rows;
+                                for(s32 i=0; i <= from_idx; ++i){
+                                    r = r->next;
+                                }
+                                dll_swap(r, row, RRow);
                             }
                         }
                         ImGui::EndDragDropTarget();
@@ -740,8 +738,19 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         }
         custom_separator();
 
-        //###TRANSACTIONS###
+        //note: popluate with 0's
         Transaction* trans = pm->transactions;
+        for(s32 t_idx = 0; t_idx < pm->transactions_count; ++t_idx){
+            trans = trans->next;
+
+            if(trans->amount[0] == 0){
+                trans->amount[0] = '0';
+                trans->amount[1] = '\0';
+            }
+        }
+
+        //###TRANSACTIONS###
+        trans = pm->transactions;
         for(s32 i=0; i < pm->transactions_count; ++i){
             trans = trans->next;
 
@@ -756,9 +765,13 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             if(ImGui::BeginDragDropTarget()){
                 if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DRAG_ROW")){
                     s32* payload_data = (s32*)payload->Data;
-                    s32 from_index = *payload_data;
-                    if(from_index != i){
-                        //std::swap(transactions[from_index], transactions[i]);
+                    s32 from_idx = *payload_data;
+                    if(from_idx != i){
+                        Transaction* t = pm->transactions;
+                        for(s32 i=0; i <= from_idx; ++i){
+                            t = t->next;
+                        }
+                        dll_swap(t, trans, Transaction);
                     }
                 }
                 ImGui::EndDragDropTarget();
