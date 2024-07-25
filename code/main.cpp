@@ -268,39 +268,30 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         tm->frame_arena = push_arena(&tm->arena, MB(100));
         tm->options_arena = push_arena(&tm->arena, MB(100));
 
-        pm->category_pool = push_pool(&pm->arena, sizeof(CCategory), 128);
-        pm->row_pool = push_pool(&pm->arena, sizeof(RRow), 128);
+        show_cursor(true);
+
+        // BUDGET STUFFENINGS
+        pm->category_pool = push_pool(&pm->arena, sizeof(Category), 128);
+        pm->row_pool = push_pool(&pm->arena, sizeof(Row), 256);
         pm->transaction_pool = push_pool(&pm->arena, sizeof(Transaction), 256);
 
         pool_free_all(pm->category_pool);
         pool_free_all(pm->row_pool);
         pool_free_all(pm->transaction_pool);
 
-        pm->categories = (CCategory*)pool_next(pm->category_pool);
+        pm->categories = (Category*)pool_next(pm->category_pool);
         dll_clear(pm->categories);
         pm->transactions = (Transaction*)pool_next(pm->transaction_pool);
         dll_clear(pm->transactions);
 
-        show_cursor(true);
-
-        init_camera();
-        init_console(&pm->arena, FontAsset_Arial);
-        init_console_commands();
-
-        pm->current_font = FontAsset_Arial;
-        pm->font = &tm->assets.fonts[FontAsset_Arial];
-
-        // setup free entities array in reverse order
-        entities_clear();
-
         // todo: look at this
-        //category_options = push_array(tm->options_arena, String8, 128);
-        //for(s32 i=0; i < 128; ++i){
-        //    String8* option = category_options + i;
-        //    option->str = push_array(tm->options_arena, u8, 128);
-        //}
-        //String8* first_option = category_options + 0;
-        //*first_option = str8("\0", 1);
+        pm->category_options = push_array(tm->options_arena, String8, 128);
+        for(s32 i=0; i < 128; ++i){
+            String8* option = pm->category_options + i;
+            option->str = push_array(tm->options_arena, u8, 128);
+            pm->options_count++;
+        }
+        *pm->category_options = str8(" \0", 2);
 
         memory.initialized = true;
     }
@@ -425,9 +416,9 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         ImGui::SameLine();
         ImGui::SetCursorPosX(plus_column_start);
         if (ImGui::Button("+##add_category_button")) {
-            CCategory* category = (CCategory*)pool_next(pm->category_pool);
+            Category* category = (Category*)pool_next(pm->category_pool);
             dll_push_back(pm->categories, category);
-            category->rows = (RRow*)pool_next(pm->row_pool);
+            category->rows = (Row*)pool_next(pm->row_pool);
             dll_clear(category->rows);
 
             pm->categories_count++;
@@ -436,11 +427,11 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         custom_separator();
 
         //note: popluate with 0's
-        CCategory* category = pm->categories;
+        Category* category = pm->categories;
         for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
             category = category->next;
 
-            RRow* row = category->rows;
+            Row* row = category->rows;
             for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
                 row = row->next;
 
@@ -484,11 +475,11 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                     s32* payload_data = (s32*)payload->Data;
                     s32 from_idx = *payload_data;
                     if(from_idx != c_idx) {
-                        CCategory* c = pm->categories;
+                        Category* c = pm->categories;
                         for(s32 i=0; i <= from_idx; ++i){
                             c = c->next;
                         }
-                        dll_swap(c, category, CCategory);
+                        dll_swap(c, category, Category);
                     }
                 }
                 ImGui::EndDragDropTarget();
@@ -533,7 +524,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             ImGui::SetCursorPosX(plus_column_start);
             ImGui::PushID(c_idx);
             if (ImGui::Button("+##add_row_button")) {
-                RRow* r = (RRow*)pool_next(pm->row_pool);
+                Row* r = (Row*)pool_next(pm->row_pool);
                 dll_push_back(category->rows, r);
 
                 category->draw_rows = true;
@@ -557,7 +548,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
             category->planned = 0;
             category->actual = 0;
-            RRow* row = category->rows;
+            Row* row = category->rows;
             for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
                 row = row->next;
 
@@ -582,11 +573,11 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                             s32* payload_data = (s32*)payload->Data;
                             s32 from_idx = *payload_data;
                             if(from_idx != r_idx) {
-                                RRow* r = category->rows;
+                                Row* r = category->rows;
                                 for(s32 i=0; i <= from_idx; ++i){
                                     r = r->next;
                                 }
-                                dll_swap(r, row, RRow);
+                                dll_swap(r, row, Row);
                             }
                         }
                         ImGui::EndDragDropTarget();
@@ -654,24 +645,31 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         total_diff = diff;
         total_saved = std::atoi(budget) - actual;
 
-        // todo: Do i need this?
-        //u32 count = 1;
-        //for (s32 c_idx = 1; c_idx < pm->categories_count; ++c_idx){
-        //    Category& category = categories[c_idx];
-        //    for(s32 r_idx = 0; r_idx < category.row_count; ++r_idx){
-        //        Row& row = category.rows[r_idx];
+        // note: collect options
+        u32 count = 1;
+        pm->options_count = 1;
+        category = pm->categories;
+        for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
+            category = category->next;
 
-        //        String8* opt = category_options + count;
-        //        if(row.name[0] != '\0'){
-        //            u32 length = str_length(row.name);
-        //            *opt = str8(row.name, length);
-        //        }
-        //        else{
-        //            *opt = str8("\0", 0);
-        //        }
-        //        count++;
-        //    }
-        //}
+            Row* row = category->rows;
+            for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
+                row = row->next;
+
+                String8* opt = pm->category_options + count;
+                if(row->name[0] != '\0'){
+                    if(!char_only_spaces(row->name)){ // don't include rows that are named only spaces
+                        u32 length = char_length(row->name);
+                        *opt = str8(row->name, length);
+                        pm->options_count++;
+                    }
+                }
+                else{
+                    *opt = str8("", 0);
+                }
+                count++;
+            }
+        }
 
         //########COLUMN2######################################################################
         ImGui::NextColumn();
@@ -734,11 +732,25 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             Transaction* trans = (Transaction*)pool_next(pm->transaction_pool);
             dll_push_back(pm->transactions, trans);
 
+            if(pm->transactions_count == 0){
+                String8 date = str8("01/01/2024\0", 11);
+                memory_copy((void*)trans->date, (void*)date.str, date.size);
+            }
+            else{
+                Transaction* last = trans->prev;
+                memory_copy((void*)trans->date, (void*)last->date, (u32)11);
+            }
+            memory_copy((void*)trans->name, (void*)pm->category_options->str, pm->category_options->size);
+
             pm->transactions_count++;
         }
         custom_separator();
 
-        //note: popluate with 0's
+        //##################
+        //###TRANSACTIONS###
+        //##################
+
+        //note: popluate amount's with 0's
         Transaction* trans = pm->transactions;
         for(s32 t_idx = 0; t_idx < pm->transactions_count; ++t_idx){
             trans = trans->next;
@@ -749,7 +761,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             }
         }
 
-        //###TRANSACTIONS###
+        // note: render transactions
         trans = pm->transactions;
         for(s32 i=0; i < pm->transactions_count; ++i){
             trans = trans->next;
@@ -800,32 +812,68 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
             ImGui::PopItemWidth();
 
-            //todo: fix this
-            //ImGui::SameLine();
-            //ImGui::PushItemWidth(category_select_column_width);
-            ////std::string combo_preview_value;
-            //unique_id = "##category_select" + std::to_string(i);
-            //String8* preview_option = category_options + trans->category_option;
-            //if (ImGui::BeginCombo(unique_id.c_str(), (char*)preview_option->str)){
-            //    for (int n = 0; n < pm->total_rows_count; n++){
-            //        const bool is_selected = (trans->category_option == n);
+            // note: SELECTION BOX
+            ImGui::SameLine();
+            ImGui::PushItemWidth(category_select_column_width);
 
-            //        String8* selected_option = category_options + n;
-            //        if(selected_option->size == 0){
-            //            continue;
-            //        }
+            // note: make selection box not transparent
+            ImVec4 popup_bg_color = ImGui::GetStyleColorVec4(ImGuiCol_PopupBg);
+            popup_bg_color.w = 1.0f; // Set alpha to 1.0 (fully opaque)
+            ImGui::PushStyleColor(ImGuiCol_PopupBg, ImGui::GetColorU32(popup_bg_color));
 
-            //        if (ImGui::Selectable((char*)selected_option->str, is_selected)){
-            //            trans->category_option = n;
-            //        }
+            ImVec4 frame_bg_color = ImGui::GetStyleColorVec4(ImGuiCol_FrameBg);
+            bool found = false;
+            char space[] = " ";
+            if(!char_cmp(trans->name, space)){
+                category = pm->categories;
+                for(s32 c_idx = 0; c_idx < pm->categories_count && !found; ++c_idx){
+                    category = category->next;
 
-            //        if (is_selected){
-            //            ImGui::SetItemDefaultFocus();
-            //        }
-            //    }
-            //    ImGui::EndCombo();
-            //}
-            //ImGui::PopItemWidth();
+                    Row* row = category->rows;
+                    for(s32 r_idx = 0; r_idx < category->row_count && !found; ++r_idx){
+                        row = row->next;
+                        u32 l1 = char_length(trans->name);
+                        u32 l2 = char_length(row->name);
+                        if(l1 == l2){
+                            if(char_cmp(trans->name, row->name)){
+                                found = true;
+                            }
+                        }
+                    }
+                }
+                if(!found){
+                    frame_bg_color.x = 1;
+                    frame_bg_color.y = 0;
+                    frame_bg_color.z = 0;
+                }
+            }
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImGui::GetColorU32(frame_bg_color));
+
+
+            unique_id = "##category_select" + std::to_string(i);
+            if(ImGui::BeginCombo(unique_id.c_str(), trans->name)){
+                for (int n = 0; n < pm->options_count; n++){
+                    String8 itr_option = pm->category_options[n];
+                    String8 trans_option = str8(trans->name, char_length(trans->name));
+
+                    if(itr_option.size == 0){
+                        continue;
+                    }
+
+                    const bool is_selected = str8_compare(itr_option, trans_option);
+                    if (ImGui::Selectable((char*)itr_option.str, is_selected)){
+                        //char_copy(trans->name, (char*)itr_option.str);
+                        memory_copy((void*)trans->name, (void*)itr_option.str, itr_option.size);
+                    }
+
+                    if (is_selected){
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::PopStyleColor(2);
+            ImGui::PopItemWidth();
 
             ImGui::SameLine();
             ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + plus_expense_column_start);
@@ -837,6 +885,34 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                 pool_free(pm->transaction_pool, trans);
             }
         }
+
+        // note: collect transactions
+        category = pm->categories;
+        for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
+            category = category->next;
+
+            Row* row = category->rows;
+            for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
+                row = row->next;
+                row->actual = 0;
+
+                trans = pm->transactions;
+                for(s32 t_idx = 0; t_idx < pm->transactions_count; ++t_idx){
+                    trans = trans->next;
+
+                    u32 l1 = char_length(trans->name);
+                    u32 l2 = char_length(row->name);
+                    if(l1 == l2){
+                        if(char_cmp(row->name, trans->name)){
+                            s32 amount = atoi(trans->amount);
+                            row->actual += amount;
+                        }
+                    }
+                }
+
+            }
+        }
+
         ImGui::End();
 
         ImGui::ShowDemoWindow(); // Show demo window! :)

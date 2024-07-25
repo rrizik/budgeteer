@@ -39,7 +39,6 @@
 #include "entity.cpp"
 
 #include <string>
-#include <vector>
 
 static String8 build_path;
 static String8 fonts_path;
@@ -82,7 +81,11 @@ static void init_paths(Arena* arena);
 s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 window_type);
 static LRESULT win_message_handler_callback(HWND hwnd, u32 message, u64 w_param, s64 l_param);
 
+
 typedef struct Row{
+    Row* next;
+    Row* prev;
+
     char name[128];
     char planned[128];
     s32 actual;
@@ -90,42 +93,18 @@ typedef struct Row{
 } Row;
 
 typedef struct Category{
+    Category* next;
+    Category* prev;
+    Row* rows;
+
     char name[128];
     s32 planned;
     s32 actual;
     s32 diff;
 
-    bool draw_rows;
     u32 row_count;
-
-    std::vector<Row> rows;
+    bool draw_rows;
 } Category;
-
-s32 counter = 0;
-s32 r_counter = 0;
-typedef struct RRow{
-    RRow* next;
-    RRow* prev;
-
-    char name[128];
-    char planned[128];
-    s32 actual;
-    s32 diff;
-} RRow;
-
-typedef struct CCategory{
-    CCategory* next;
-    CCategory* prev;
-    RRow* rows;
-
-    char name[128];
-    s32 planned;
-    s32 actual;
-    s32 diff;
-
-    u32 row_count;
-    bool draw_rows;
-} CCategory;
 
 typedef struct Transaction{
     Transaction* next;
@@ -134,10 +113,8 @@ typedef struct Transaction{
     char date[128];
     char amount[128];
     char description[128];
-    s32 category_option;
+    char name[128];
 } Transation;
-
-static std::vector<Transaction> transactions;
 
 #define MAX_LEVELS 3
 #define MAX_LIVES 3
@@ -152,10 +129,12 @@ typedef struct PermanentMemory{
     u32 total_rows_count;
     u32 categories_count;
     u32 transactions_count;
+    u32 options_count;
 
-    CCategory* categories;
+    Category* categories;
     Transaction* transactions;
 
+	String8* category_options;
 
 
     Font* font;
@@ -194,8 +173,6 @@ static s32 total_planned;
 static s32 total_actual;
 static s32 total_diff;
 static s32 total_saved;
-
-String8* category_options;
 
 static f32 input_padding = 4.0f;
 static f32 totals_number_start = 75.0f;
@@ -260,17 +237,30 @@ static f32 plus_expense_column_start = 520;
 //    return(right_side);
 //}
 
-static void
-char_copy(char* left, char* right){
+
+static bool
+char_cmp(char* left, char* right){
     u32 count = 0;
     while(*left){
-        *right = *left;
-        right++;
-        left++;
+        if(*left++ != *right++){
+            return(false);
+        }
         count++;
     }
     left = left - count;
     right = right - count;
+    return(true);
+}
+
+static bool
+char_only_spaces(char* src){
+    u32 count = 0;
+    while(*src){
+        if(!(*src++ == ' ')){
+            return(false);
+        }
+    }
+    return(true);
 }
 
 #endif
