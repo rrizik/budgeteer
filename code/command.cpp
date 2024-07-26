@@ -28,13 +28,11 @@ command_exit(String8* args){
 static void
 command_load(String8* args){
     console.output_history[console.output_history_count++] = str8_formatted(global_arena, "loading from file: %s", args->str);
-    deserialize_data(*args);
 }
 
 static void
 command_save(String8* args){
     console.output_history[console.output_history_count++] = str8_formatted(global_arena, "saving to file: %s", args->str);
-    serialize_data(*args);
     //console_store_output(str8_formatted(global_arena, "saving to file: %s", args->str));
 }
 

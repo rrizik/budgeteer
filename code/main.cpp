@@ -1,15 +1,49 @@
 #include "main.hpp"
 
-// todo: move header includes here
-#include "wave.cpp"
 #include "bitmap.cpp"
-#include "wasapi.cpp"
 #include "d3d11_init.cpp"
 #include "d3d11_render.cpp"
 #include "font.cpp"
-#include "console.cpp"
-#include "command.cpp"
-#include "game.cpp"
+
+static void
+load_assets(Arena* arena){
+
+    ScratchArena scratch = begin_scratch();
+
+    Bitmap bm;
+    bm = load_bitmap(scratch.arena, str8_literal("sprites/ship2.bmp"));
+    init_texture_resource(&tm->assets.textures[TextureAsset_Ship].view, &bm);
+    bm = load_bitmap(scratch.arena, str8_literal("sprites/circle.bmp"));
+    init_texture_resource(&tm->assets.textures[TextureAsset_Bullet].view, &bm);
+    bm = load_bitmap(scratch.arena, str8_literal("sprites/asteroid.bmp"));
+    init_texture_resource(&tm->assets.textures[TextureAsset_Asteroid].view, &bm);
+
+    bm = load_bitmap(scratch.arena, str8_literal("sprites/flame1.bmp"));
+    init_texture_resource(&tm->assets.textures[TextureAsset_Flame1].view, &bm);
+    bm = load_bitmap(scratch.arena, str8_literal("sprites/flame2.bmp"));
+    init_texture_resource(&tm->assets.textures[TextureAsset_Flame2].view, &bm);
+    bm = load_bitmap(scratch.arena, str8_literal("sprites/flame3.bmp"));
+    init_texture_resource(&tm->assets.textures[TextureAsset_Flame3].view, &bm);
+    bm = load_bitmap(scratch.arena, str8_literal("sprites/flame4.bmp"));
+    init_texture_resource(&tm->assets.textures[TextureAsset_Flame4].view, &bm);
+    bm = load_bitmap(scratch.arena, str8_literal("sprites/flame5.bmp"));
+    init_texture_resource(&tm->assets.textures[TextureAsset_Flame5].view, &bm);
+
+    bm = load_bitmap(scratch.arena, str8_literal("sprites/explosion1.bmp"));
+    init_texture_resource(&tm->assets.textures[TextureAsset_Explosion1].view, &bm);
+    bm = load_bitmap(scratch.arena, str8_literal("sprites/explosion2.bmp"));
+    init_texture_resource(&tm->assets.textures[TextureAsset_Explosion2].view, &bm);
+    bm = load_bitmap(scratch.arena, str8_literal("sprites/explosion3.bmp"));
+    init_texture_resource(&tm->assets.textures[TextureAsset_Explosion3].view, &bm);
+    bm = load_bitmap(scratch.arena, str8_literal("sprites/explosion4.bmp"));
+    init_texture_resource(&tm->assets.textures[TextureAsset_Explosion4].view, &bm);
+    bm = load_bitmap(scratch.arena, str8_literal("sprites/explosion5.bmp"));
+    init_texture_resource(&tm->assets.textures[TextureAsset_Explosion5].view, &bm);
+    bm = load_bitmap(scratch.arena, str8_literal("sprites/explosion6.bmp"));
+    init_texture_resource(&tm->assets.textures[TextureAsset_Explosion6].view, &bm);
+
+    end_scratch(scratch);
+}
 
 static void
 init_paths(Arena* arena){
@@ -237,8 +271,6 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
     memory_init();
     init_clock(&clock);
-    HRESULT hr = audio_init(2, 48000, 32);
-    assert_hr(hr);
 
     events_init(&events);
 
@@ -271,9 +303,10 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         show_cursor(true);
 
         // BUDGET STUFFENINGS
-        pm->category_pool = push_pool(&pm->arena, sizeof(Category), 128);
-        pm->row_pool = push_pool(&pm->arena, sizeof(Row), 256);
+        pm->category_pool    = push_pool(&pm->arena, sizeof(Category), 128);
+        pm->row_pool         = push_pool(&pm->arena, sizeof(Row), 256);
         pm->transaction_pool = push_pool(&pm->arena, sizeof(Transaction), 256);
+        pm->data_arena       = push_arena(&pm->arena, MB(1));
 
         pool_free_all(pm->category_pool);
         pool_free_all(pm->row_pool);
@@ -293,11 +326,13 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         }
         *pm->category_options = str8(" \0", 2);
 
+        deserialize_data();
+
+
         memory.initialized = true;
     }
 
 
-    f32 s = 0;
     should_quit = false;
     while(!should_quit){
         begin_timed_scope("while(!should_quit)");
@@ -331,9 +366,6 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
         // command arena
         draw_clear_color(tm->render_command_arena, BACKGROUND_COLOR);
-        // todo: also use flags here
-
-        Font* font = &tm->assets.fonts[pm->current_font];
 
         f64 second_elapsed = clock.get_seconds_elapsed(clock.get_os_timer(), frame_tick_start);
         if(second_elapsed > 1){
@@ -344,9 +376,6 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
         //prs32("FPS: %f - MSPF: %f - time_dt: %f - accumulator: %lu -  frame_time: %f - second_elapsed: %f - simulations: %i\n", FPS, MSPF, clock.dt, accumulator, frame_time, second_elapsed, simulations);
         String8 fps = str8_formatted(tm->frame_arena, "FPS: %.2f", FPS);
-
-        // draw everything
-        draw_commands(tm->render_command_arena);
 
 
 
@@ -382,6 +411,18 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         }
         else{
             ImGui::Text("%i", total_diff);
+        }
+
+        ImGui::Text("Goal: ");
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(totals_number_start);
+        if(total_goal < 0){
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+            ImGui::Text("%i", total_goal);
+            ImGui::PopStyleColor();
+        }
+        else{
+            ImGui::Text("%i", total_goal);
         }
 
         ImGui::Text("Saved: ");
@@ -643,7 +684,8 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         total_planned = planned;
         total_actual = actual;
         total_diff = diff;
-        total_saved = std::atoi(budget) - actual;
+        total_saved = atoi(budget) - total_actual;
+        total_goal = atoi(budget) - total_planned;
 
         // note: collect options
         u32 count = 1;
@@ -660,7 +702,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                 if(row->name[0] != '\0'){
                     if(!char_only_spaces(row->name)){ // don't include rows that are named only spaces
                         u32 length = char_length(row->name);
-                        *opt = str8(row->name, length);
+                        *opt = str8(row->name, length + 1);
                         pm->options_count++;
                     }
                 }
@@ -862,8 +904,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
                     const bool is_selected = str8_compare(itr_option, trans_option);
                     if (ImGui::Selectable((char*)itr_option.str, is_selected)){
-                        //char_copy(trans->name, (char*)itr_option.str);
-                        memory_copy((void*)trans->name, (void*)itr_option.str, itr_option.size);
+                        memory_copy((void*)trans->name, (void*)itr_option.str, itr_option.size + 1);
                     }
 
                     if (is_selected){
@@ -917,12 +958,14 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
         ImGui::ShowDemoWindow(); // Show demo window! :)
 
+        // draw everything
+        draw_commands(tm->render_command_arena);
+
         {
             ImGui::Render();
             ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
         }
 
-        console_draw();
         d3d_swapchain->Present(1, 0);
 
         arena_free(tm->frame_arena);
@@ -932,13 +975,16 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         //end_profiler();
     }
 
+    if(should_quit){
+        serialize_data();
+    }
+
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
 
     d3d_release();
     end_profiler();
-    audio_release();
 
     return(0);
 }
