@@ -703,12 +703,12 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                     if(!char_only_spaces(row->name)){ // don't include rows that are named only spaces
                         u32 length = char_length(row->name);
                         *opt = str8(row->name, length + 1);
-                        pm->options_count++;
                     }
                 }
                 else{
                     *opt = str8("", 0);
                 }
+                pm->options_count++;
                 count++;
             }
         }
@@ -927,7 +927,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             }
         }
 
-        // note: collect transactions
+        // note: collect transactions amounts
         category = pm->categories;
         for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
             category = category->next;
