@@ -734,6 +734,15 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         ImGui::SeparatorText("Transactions");
 
         if(ImGui::BeginTabBar("##Month", ImGuiTabBarFlags_None)){
+            ImVec4 active_color = ImGui::GetStyleColorVec4(ImGuiCol_TabActive);
+            active_color = ImVec4(0.0f, active_color.y * 0.8f, active_color.z * 0.4f, active_color.w);
+
+            ImVec4 hover_color = ImGui::GetStyleColorVec4(ImGuiCol_TabHovered);
+            hover_color = ImVec4(0.0f, hover_color.y * 0.4f, hover_color.z * 0.8f, hover_color.w);
+
+            ImGui::PushStyleColor(ImGuiCol_TabActive, active_color);
+            ImGui::PushStyleColor(ImGuiCol_TabHovered, hover_color);
+
             if(ImGui::BeginTabItem("January")){
                 pm->month_idx = Month_Jan;
                 ImGui::EndTabItem();
@@ -782,6 +791,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                 pm->month_idx = Month_Dec;
                 ImGui::EndTabItem();
             }
+            ImGui::PopStyleColor(2);
             ImGui::EndTabBar();
         }
 
@@ -1011,7 +1021,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
     }
 
     if(should_quit){
-        serialize_data();
+        //serialize_data();
     }
 
     ImGui_ImplDX11_Shutdown();

@@ -328,6 +328,22 @@ str8_extend_to_char(String8* string, char c){
     return(count);
 }
 
+typedef enum ParsingState{
+    ParsingState_None,
+    ParsingState_LineType_Budget,
+    ParsingState_LineType_Category,
+    ParsingState_LineType_Row,
+    ParsingState_LineType_Transaction,
+
+    ParsingState_Parsing_Budget,
+    ParsingState_Parsing_Category,
+    ParsingState_Parsing_Row,
+    ParsingState_Parsing_Transaction,
+    ParsingState_Count,
+} ParsingState;
+
+ParsingState state = ParsingState_None;
+
 static void
 deserialize_data(){
     ScratchArena scratch = begin_scratch();
@@ -349,22 +365,31 @@ deserialize_data(){
     while(ptr->size){
         line = str8_next_line(ptr);
 
-        if(str8_cmp(line, str8_literal("#budget\n"))){
-            line = str8_next_line(ptr);
+        if(str8_starts_with(line, str8_literal("#"))){
+            if(str8_cmp(line, str8_literal("#budget\n"))){
+                state = ParsingState_LineType_Budget;
+            }
+            else if(str8_cmp(line, str8_literal("#category\n"))){
+                state = ParsingState_LineType_Category;
+            }
+            else if(str8_cmp(line, str8_literal("#transaction\n"))){
+                state = ParsingState_LineType_Transaction;
+            }
+        }
+        else if(state == ParsingState_LineType_Budget){
             String8 word = str8_next_word(&line);
 
             String8Node str8_node = {0};
             str8_node = str8_split(scratch.arena, word, '=');
             copy_word_to_char(budget, str8_node.prev->str);
         }
-        else if(str8_cmp(line, str8_literal("#category\n"))){
+        else if(state == ParsingState_LineType_Category){
             Category* category = (Category*)pool_next(pm->category_pool);
             dll_push_back(pm->categories, category);
             category->rows = (Row*)pool_next(pm->row_pool);
             dll_clear(category->rows);
-            pm->categories_count++;
+            ++pm->categories_count;
 
-            line = str8_next_line(ptr);
             while(line.size){
                 String8 word = str8_next_word(&line);
 
@@ -378,163 +403,266 @@ deserialize_data(){
                         copy_word_to_char(category->name, str8_node.prev->str);
                     }
                 }
-                else if(str8_contains(word, str8_literal("row_count"))){
-                    str8_node = str8_split(scratch.arena, word, '=');
-                    category->row_count = atoi((char*)str8_node.prev->str.str);
-                }
                 else if(str8_contains(word, str8_literal("draw_rows"))){
                     str8_node = str8_split(scratch.arena, word, '=');
                     category->draw_rows = atoi((char*)str8_node.prev->str.str);
                 }
             }
+            state = ParsingState_LineType_Row;
+        }
+        else if(state == ParsingState_LineType_Row){
+            Category* category = pm->categories->prev;
+            ++category->row_count;
 
-            for(s32 i=0; i < category->row_count; ++i){
-                line = str8_next_line(ptr);
+            Row* row = (Row*)pool_next(pm->row_pool);
+            dll_push_back(category->rows, row);
+            ++pm->total_rows_count;
 
-                Row* row = (Row*)pool_next(pm->row_pool);
-                dll_push_back(category->rows, row);
-                pm->total_rows_count++;
+            while(line.size){
+                String8 word = str8_next_word(&line);
 
-                while(line.size){
-                    String8 word = str8_next_word(&line);
-
-                    String8Node str8_node = {0};
-                    if(str8_contains(word, str8_literal("name"))){
-                        str8_node = str8_split(scratch.arena, word, '=');
-                        if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
-                            copy_word_to_char(row->name, str8_literal("\0"));
-                        }
-                        else{
-                            copy_word_to_char(row->name, str8_node.prev->str);
-                        }
+                String8Node str8_node = {0};
+                if(str8_contains(word, str8_literal("name"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+                        copy_word_to_char(row->name, str8_literal("\0"));
                     }
-                    else if(str8_contains(word, str8_literal("planned"))){
-                        str8_node = str8_split(scratch.arena, word, '=');
-                        copy_word_to_char(row->planned, str8_node.prev->str);
+                    else{
+                        copy_word_to_char(row->name, str8_node.prev->str);
                     }
+                }
+                else if(str8_contains(word, str8_literal("planned"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    copy_word_to_char(row->planned, str8_node.prev->str);
                 }
             }
         }
-        else if(str8_cmp(line, str8_literal("#transactions\n"))){
-            while(ptr->size){
-                line = str8_next_line(ptr);
-
-                String8 word = str8_next_word(&line);
-                if(str8_cmp(word, str8_literal("#m0"))){
-                    word = str8_next_word(&line);
-                    pm->t_month = pm->transaction_months + 0;
-                    pm->t_month->count = atoi((char*)word.str);
-                }
-                else if(str8_cmp(word, str8_literal("#m1"))){
-                    word = str8_next_word(&line);
-                    pm->t_month = pm->transaction_months + 1;
-                    pm->t_month->count = atoi((char*)word.str);
-                }
-                else if(str8_cmp(word, str8_literal("#m2"))){
-                    word = str8_next_word(&line);
-                    pm->t_month = pm->transaction_months + 2;
-                    pm->t_month->count = atoi((char*)word.str);
-                }
-                else if(str8_cmp(word, str8_literal("#m3"))){
-                    word = str8_next_word(&line);
-                    pm->t_month = pm->transaction_months + 3;
-                    pm->t_month->count = atoi((char*)word.str);
-                }
-                else if(str8_cmp(word, str8_literal("#m4"))){
-                    word = str8_next_word(&line);
-                    pm->t_month = pm->transaction_months + 4;
-                    pm->t_month->count = atoi((char*)word.str);
-                }
-                else if(str8_cmp(word, str8_literal("#m5"))){
-                    word = str8_next_word(&line);
-                    pm->t_month = pm->transaction_months + 5;
-                    pm->t_month->count = atoi((char*)word.str);
-                }
-                else if(str8_cmp(word, str8_literal("#m6"))){
-                    word = str8_next_word(&line);
-                    pm->t_month = pm->transaction_months + 6;
-                    pm->t_month->count = atoi((char*)word.str);
-                }
-                else if(str8_cmp(word, str8_literal("#m7"))){
-                    word = str8_next_word(&line);
-                    pm->t_month = pm->transaction_months + 7;
-                    pm->t_month->count = atoi((char*)word.str);
-                }
-                else if(str8_cmp(word, str8_literal("#m8"))){
-                    word = str8_next_word(&line);
-                    pm->t_month = pm->transaction_months + 8;
-                    pm->t_month->count = atoi((char*)word.str);
-                }
-                else if(str8_cmp(word, str8_literal("#m9"))){
-                    word = str8_next_word(&line);
-                    pm->t_month = pm->transaction_months + 9;
-                    pm->t_month->count = atoi((char*)word.str);
-                }
-                else if(str8_cmp(word, str8_literal("#m10"))){
-                    word = str8_next_word(&line);
-                    pm->t_month = pm->transaction_months + 10;
-                    pm->t_month->count = atoi((char*)word.str);
-                }
-                else if(str8_cmp(word, str8_literal("#m11"))){
-                    word = str8_next_word(&line);
-                    pm->t_month = pm->transaction_months + 11;
-                    pm->t_month->count = atoi((char*)word.str);
-                }
-
-                for(s32 t_idx=0; t_idx < pm->t_month->count; ++t_idx){
-                    line = str8_next_line(ptr);
-
-                    Transaction* trans = (Transaction*)pool_next(pm->transaction_pool);
-                    dll_push_back(pm->t_month->transactions, trans);
-
-                    while(line.size){
-                        String8 word = str8_next_word(&line);
-
-                        String8Node str8_node = {0};
-
-                        if(str8_contains(word, str8_literal("date"))){
-                            str8_node = str8_split(scratch.arena, word, '=');
-                            if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
-                                copy_word_to_char(trans->date, str8_literal("\0"));
-                            }
-                            else{
-                                copy_word_to_char(trans->date, str8_node.prev->str);
-                            }
-                        }
-                        else if(str8_contains(word, str8_literal("amount"))){
-                            str8_node = str8_split(scratch.arena, word, '=');
-                            if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
-                                copy_word_to_char(trans->amount, str8_literal("\0"));
-                            }
-                            else{
-                                copy_word_to_char(trans->amount, str8_node.prev->str);
-                            }
-                        }
-                        else if(str8_contains(word, str8_literal("description"))){
-                            u32 count = str8_extend_to_char(&word, '\x1B');
-                            str8_advance(&line, count);
-                            str8_node = str8_split(scratch.arena, word, '=');
-                            if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
-                                copy_word_to_char(trans->description, str8_literal("\0"));
-                            }
-                            else{
-                                copy_word_to_char(trans->description, str8_node.prev->str);
-                            }
-                        }
-                        else if(str8_contains(word, str8_literal("name"))){
-                            str8_node = str8_split(scratch.arena, word, '=');
-                            if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
-                                copy_word_to_char(trans->name, str8_literal("\0"));
-                            }
-                            else{
-                                copy_word_to_char(trans->name, str8_node.prev->str);
-                            }
-                        }
-                    }
-                }
-            }
+        else if(state == ParsingState_LineType_Transaction){
         }
     }
+
+        //if(str8_cmp(line, str8_literal("#budget\n"))){
+        //    line = str8_next_line(ptr);
+        //    String8 word = str8_next_word(&line);
+
+        //    String8Node str8_node = {0};
+        //    str8_node = str8_split(scratch.arena, word, '=');
+        //    copy_word_to_char(budget, str8_node.prev->str);
+        //}
+        //else if(str8_cmp(line, str8_literal("#category\n"))){
+        //    Category* category = (Category*)pool_next(pm->category_pool);
+        //    dll_push_back(pm->categories, category);
+        //    category->rows = (Row*)pool_next(pm->row_pool);
+        //    dll_clear(category->rows);
+        //    pm->categories_count++;
+
+        //    line = str8_next_line(ptr);
+        //    while(line.size){
+        //        String8 word = str8_next_word(&line);
+
+        //        String8Node str8_node = {0};
+        //        if(str8_contains(word, str8_literal("name"))){
+        //            str8_node = str8_split(scratch.arena, word, '=');
+        //            if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+        //                copy_word_to_char(category->name, str8_literal("\0"));
+        //            }
+        //            else{
+        //                copy_word_to_char(category->name, str8_node.prev->str);
+        //            }
+        //        }
+        //        else if(str8_contains(word, str8_literal("row_count"))){
+        //            str8_node = str8_split(scratch.arena, word, '=');
+        //            category->row_count = atoi((char*)str8_node.prev->str.str);
+        //        }
+        //        else if(str8_contains(word, str8_literal("draw_rows"))){
+        //            str8_node = str8_split(scratch.arena, word, '=');
+        //            category->draw_rows = atoi((char*)str8_node.prev->str.str);
+        //        }
+        //    }
+
+        //    for(s32 i=0; i < category->row_count; ++i){
+        //        line = str8_next_line(ptr);
+
+        //        Row* row = (Row*)pool_next(pm->row_pool);
+        //        dll_push_back(category->rows, row);
+        //        pm->total_rows_count++;
+
+        //        while(line.size){
+        //            String8 word = str8_next_word(&line);
+
+        //            String8Node str8_node = {0};
+        //            if(str8_contains(word, str8_literal("name"))){
+        //                str8_node = str8_split(scratch.arena, word, '=');
+        //                if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+        //                    copy_word_to_char(row->name, str8_literal("\0"));
+        //                }
+        //                else{
+        //                    copy_word_to_char(row->name, str8_node.prev->str);
+        //                }
+        //            }
+        //            else if(str8_contains(word, str8_literal("planned"))){
+        //                str8_node = str8_split(scratch.arena, word, '=');
+        //                copy_word_to_char(row->planned, str8_node.prev->str);
+        //            }
+        //        }
+        //    }
+        //}
+    //    else if(str8_cmp(line, str8_literal("#transactions\n"))){
+    //        while(ptr->size){
+    //            line = str8_next_line(ptr);
+
+    //            String8 word = str8_next_word(&line);
+    //            if(str8_cmp(word, str8_literal("#m0"))){
+    //                word = str8_next_word(&line);
+    //                String8Node str8_node = {0};
+    //                str8_node = str8_split(scratch.arena, word, '=');
+
+    //                pm->t_month = pm->transaction_months + 0;
+    //                pm->t_month->count = atoi((char*)str8_node.prev->str.str);
+    //            }
+    //            else if(str8_cmp(word, str8_literal("#m1"))){
+    //                word = str8_next_word(&line);
+    //                String8Node str8_node = {0};
+    //                str8_node = str8_split(scratch.arena, word, '=');
+
+    //                pm->t_month = pm->transaction_months + 1;
+    //                pm->t_month->count = atoi((char*)str8_node.prev->str.str);
+    //            }
+    //            else if(str8_cmp(word, str8_literal("#m2"))){
+    //                word = str8_next_word(&line);
+    //                String8Node str8_node = {0};
+    //                str8_node = str8_split(scratch.arena, word, '=');
+
+    //                pm->t_month = pm->transaction_months + 2;
+    //                pm->t_month->count = atoi((char*)str8_node.prev->str.str);
+    //            }
+    //            else if(str8_cmp(word, str8_literal("#m3"))){
+    //                word = str8_next_word(&line);
+    //                String8Node str8_node = {0};
+    //                str8_node = str8_split(scratch.arena, word, '=');
+
+    //                pm->t_month = pm->transaction_months + 3;
+    //                pm->t_month->count = atoi((char*)str8_node.prev->str.str);
+    //            }
+    //            else if(str8_cmp(word, str8_literal("#m4"))){
+    //                word = str8_next_word(&line);
+    //                String8Node str8_node = {0};
+    //                str8_node = str8_split(scratch.arena, word, '=');
+
+    //                pm->t_month = pm->transaction_months + 4;
+    //                pm->t_month->count = atoi((char*)str8_node.prev->str.str);
+    //            }
+    //            else if(str8_cmp(word, str8_literal("#m5"))){
+    //                word = str8_next_word(&line);
+    //                String8Node str8_node = {0};
+    //                str8_node = str8_split(scratch.arena, word, '=');
+
+    //                pm->t_month = pm->transaction_months + 5;
+    //                pm->t_month->count = atoi((char*)str8_node.prev->str.str);
+    //            }
+    //            else if(str8_cmp(word, str8_literal("#m6"))){
+    //                word = str8_next_word(&line);
+    //                String8Node str8_node = {0};
+    //                str8_node = str8_split(scratch.arena, word, '=');
+
+    //                pm->t_month = pm->transaction_months + 6;
+    //                pm->t_month->count = atoi((char*)str8_node.prev->str.str);
+    //            }
+    //            else if(str8_cmp(word, str8_literal("#m7"))){
+    //                word = str8_next_word(&line);
+    //                String8Node str8_node = {0};
+    //                str8_node = str8_split(scratch.arena, word, '=');
+
+    //                pm->t_month = pm->transaction_months + 7;
+    //                pm->t_month->count = atoi((char*)str8_node.prev->str.str);
+    //            }
+    //            else if(str8_cmp(word, str8_literal("#m8"))){
+    //                word = str8_next_word(&line);
+    //                String8Node str8_node = {0};
+    //                str8_node = str8_split(scratch.arena, word, '=');
+
+    //                pm->t_month = pm->transaction_months + 8;
+    //                pm->t_month->count = atoi((char*)str8_node.prev->str.str);
+    //            }
+    //            else if(str8_cmp(word, str8_literal("#m9"))){
+    //                word = str8_next_word(&line);
+    //                String8Node str8_node = {0};
+    //                str8_node = str8_split(scratch.arena, word, '=');
+
+    //                pm->t_month = pm->transaction_months + 9;
+    //                pm->t_month->count = atoi((char*)str8_node.prev->str.str);
+    //            }
+    //            else if(str8_cmp(word, str8_literal("#m10"))){
+    //                word = str8_next_word(&line);
+    //                String8Node str8_node = {0};
+    //                str8_node = str8_split(scratch.arena, word, '=');
+
+    //                pm->t_month = pm->transaction_months + 10;
+    //                pm->t_month->count = atoi((char*)str8_node.prev->str.str);
+    //            }
+    //            else if(str8_cmp(word, str8_literal("#m11"))){
+    //                word = str8_next_word(&line);
+    //                String8Node str8_node = {0};
+    //                str8_node = str8_split(scratch.arena, word, '=');
+
+    //                pm->t_month = pm->transaction_months + 11;
+    //                pm->t_month->count = atoi((char*)str8_node.prev->str.str);
+    //            }
+
+    //            for(s32 t_idx=0; t_idx < pm->t_month->count; ++t_idx){
+    //                line = str8_next_line(ptr);
+
+    //                Transaction* trans = (Transaction*)pool_next(pm->transaction_pool);
+    //                dll_push_back(pm->t_month->transactions, trans);
+
+    //                while(line.size){
+    //                    String8 word = str8_next_word(&line);
+
+    //                    String8Node str8_node = {0};
+
+    //                    if(str8_contains(word, str8_literal("date"))){
+    //                        str8_node = str8_split(scratch.arena, word, '=');
+    //                        if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+    //                            copy_word_to_char(trans->date, str8_literal("\0"));
+    //                        }
+    //                        else{
+    //                            copy_word_to_char(trans->date, str8_node.prev->str);
+    //                        }
+    //                    }
+    //                    else if(str8_contains(word, str8_literal("amount"))){
+    //                        str8_node = str8_split(scratch.arena, word, '=');
+    //                        if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+    //                            copy_word_to_char(trans->amount, str8_literal("\0"));
+    //                        }
+    //                        else{
+    //                            copy_word_to_char(trans->amount, str8_node.prev->str);
+    //                        }
+    //                    }
+    //                    else if(str8_contains(word, str8_literal("description"))){
+    //                        u32 count = str8_extend_to_char(&word, '\x1B');
+    //                        str8_advance(&line, count);
+    //                        str8_node = str8_split(scratch.arena, word, '=');
+    //                        if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+    //                            copy_word_to_char(trans->description, str8_literal("\0"));
+    //                        }
+    //                        else{
+    //                            copy_word_to_char(trans->description, str8_node.prev->str);
+    //                        }
+    //                    }
+    //                    else if(str8_contains(word, str8_literal("name"))){
+    //                        str8_node = str8_split(scratch.arena, word, '=');
+    //                        if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+    //                            copy_word_to_char(trans->name, str8_literal("\0"));
+    //                        }
+    //                        else{
+    //                            copy_word_to_char(trans->name, str8_node.prev->str);
+    //                        }
+    //                    }
+    //                }
+    //            }
+    //        }
+    //    }
+    //}
 
     os_file_close(file);
     end_scratch(scratch);
@@ -567,7 +695,7 @@ serialize_data(){
     for(s32 m_idx=0; m_idx < Month_Count; ++m_idx){
 
         pm->t_month = pm->transaction_months + m_idx;
-        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#m%i %i\n", m_idx, pm->t_month->count);
+        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#m%i transaction_count=%i\n", m_idx, pm->t_month->count);
 
         Transaction* t = pm->t_month->transactions;
         for(s32 t_idx = 0; t_idx < pm->t_month->count; ++t_idx){
