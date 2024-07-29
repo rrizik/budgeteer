@@ -286,46 +286,38 @@ u32_buffer_from_u8_buffer(String8* u8_buffer, String8* u32_buffer){
 
 static void
 copy_word_to_char(char* c, String8 string){
-    // note: ignores new lines
     for(s32 i=0; i < string.size; ++i){
-        if(string.str[i] != '\n'){
-            c[i] = string.str[i];
-        }
+        c[i] = string.str[i];
+    }
+    if(c[string.size - 1] == '\n' || c[string.size - 1] == '\x1B'){
+        c[string.size - 1] = '\0';
     }
 }
 
-static String8
-str8_extend_word(String8* string){
-    String8 result = {0};
-    u64 white_count = str8_eat_whitespace(string);
-
-    u8* ptr = string->str;
+static u32
+str8_extend_to_char(String8* string, char c){
+    u8* opl = string->str + string->size;
     u32 count = 0;
-    while(*ptr != ' ' && *ptr != '\n' && *ptr != '\0'){
-        count++;
-        ptr++;
-        if(count >= string->size){
-            result = {string->str, count};
-            string->str = string->str + count;
-            string->size -= count;
-            return(result);
+    bool found = false;
+    while(*opl != '\n' && *opl != '\0' && !found){
+        if(*opl == c){
+            found = true;
         }
+        count++;
+        opl++;
     }
-    if(*ptr == '\n'){
-        ++ptr; // consume newline char
+    if(*opl == c){
+        ++opl; // consume newline char
         ++count; // consume newline char
     }
 
-    result = {string->str, count};
-    string->str = string->str + count;
-    string->size -= count;
-
-    return(result);
-
-}
-
-static void
-str8_retract_word(String8* string){
+    if(found){
+        string->size += count;
+    }
+    else{
+        count = 0;
+    }
+    return(count);
 }
 
 static void
@@ -447,18 +439,16 @@ deserialize_data(){
                         }
                     }
                     else if(str8_contains(word, str8_literal("description"))){
+                        u32 count = str8_extend_to_char(&word, '\x1B');
+                        str8_advance(&line, count);
                         str8_node = str8_split(scratch.arena, word, '=');
                         if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
                             copy_word_to_char(trans->description, str8_literal("\0"));
                         }
                         else{
-                            //while(!str8_contains(str8_node.prev->str, str8_literal("=")) &&
-                            //      !str8_contains(str8_node.prev->str, str8_literal("\0"))){
-                            //    str8_extend_word(&str8_node.prev->str);
-                            //}
-                            //str8_retract_word(&str8_node.prev->str);
                             copy_word_to_char(trans->description, str8_node.prev->str);
                         }
+                        u32 a = 1;
                     }
                     else if(str8_contains(word, str8_literal("name"))){
                         str8_node = str8_split(scratch.arena, word, '=');
@@ -468,6 +458,7 @@ deserialize_data(){
                         else{
                             copy_word_to_char(trans->name, str8_node.prev->str);
                         }
+                        u32 a = 1;
                     }
                 }
             }
@@ -505,7 +496,7 @@ serialize_data(){
     for(s32 t_idx = 0; t_idx < pm->transactions_count; ++t_idx){
         t = t->next;
         arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
-                              "date=%s amount=%s description=%s name=%s\n",
+                              "date=%s amount=%s description=%s\x1B name=%s\n",
                               t->date, t->amount, t->description, t->name);
     }
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "\0");
