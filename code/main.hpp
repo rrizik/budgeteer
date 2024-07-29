@@ -144,6 +144,11 @@ typedef struct Transaction{
     char name[128];
 } Transation;
 
+typedef struct TransactionMonth{
+    Transaction* transactions;
+    u32 count;
+} TransactionMonth;
+
 typedef struct PermanentMemory{
     Arena arena;
     PoolArena* category_pool;
@@ -151,13 +156,15 @@ typedef struct PermanentMemory{
     PoolArena* transaction_pool;
     Arena* data_arena;
 
+    Category* categories;
+    TransactionMonth* t_month;
+    TransactionMonth transaction_months[12];
+    u32 month_idx;
+
     u32 total_rows_count;
     u32 categories_count;
     u32 transactions_count;
     u32 options_count;
-
-    Category* categories;
-    Transaction* transactions;
 
 	String8* category_options;
 } PermanentMemory, State;
@@ -289,6 +296,7 @@ copy_word_to_char(char* c, String8 string){
     for(s32 i=0; i < string.size; ++i){
         c[i] = string.str[i];
     }
+    c[string.size] = '\0';
     if(c[string.size - 1] == '\n' || c[string.size - 1] == '\x1B'){
         c[string.size - 1] = '\0';
     }
@@ -411,54 +419,117 @@ deserialize_data(){
             while(ptr->size){
                 line = str8_next_line(ptr);
 
-                Transaction* trans = (Transaction*)pool_next(pm->transaction_pool);
-                dll_push_back(pm->transactions, trans);
-                pm->transactions_count++;
+                String8 word = str8_next_word(&line);
+                if(str8_cmp(word, str8_literal("#m0"))){
+                    word = str8_next_word(&line);
+                    pm->t_month = pm->transaction_months + 0;
+                    pm->t_month->count = atoi((char*)word.str);
+                }
+                else if(str8_cmp(word, str8_literal("#m1"))){
+                    word = str8_next_word(&line);
+                    pm->t_month = pm->transaction_months + 1;
+                    pm->t_month->count = atoi((char*)word.str);
+                }
+                else if(str8_cmp(word, str8_literal("#m2"))){
+                    word = str8_next_word(&line);
+                    pm->t_month = pm->transaction_months + 2;
+                    pm->t_month->count = atoi((char*)word.str);
+                }
+                else if(str8_cmp(word, str8_literal("#m3"))){
+                    word = str8_next_word(&line);
+                    pm->t_month = pm->transaction_months + 3;
+                    pm->t_month->count = atoi((char*)word.str);
+                }
+                else if(str8_cmp(word, str8_literal("#m4"))){
+                    word = str8_next_word(&line);
+                    pm->t_month = pm->transaction_months + 4;
+                    pm->t_month->count = atoi((char*)word.str);
+                }
+                else if(str8_cmp(word, str8_literal("#m5"))){
+                    word = str8_next_word(&line);
+                    pm->t_month = pm->transaction_months + 5;
+                    pm->t_month->count = atoi((char*)word.str);
+                }
+                else if(str8_cmp(word, str8_literal("#m6"))){
+                    word = str8_next_word(&line);
+                    pm->t_month = pm->transaction_months + 6;
+                    pm->t_month->count = atoi((char*)word.str);
+                }
+                else if(str8_cmp(word, str8_literal("#m7"))){
+                    word = str8_next_word(&line);
+                    pm->t_month = pm->transaction_months + 7;
+                    pm->t_month->count = atoi((char*)word.str);
+                }
+                else if(str8_cmp(word, str8_literal("#m8"))){
+                    word = str8_next_word(&line);
+                    pm->t_month = pm->transaction_months + 8;
+                    pm->t_month->count = atoi((char*)word.str);
+                }
+                else if(str8_cmp(word, str8_literal("#m9"))){
+                    word = str8_next_word(&line);
+                    pm->t_month = pm->transaction_months + 9;
+                    pm->t_month->count = atoi((char*)word.str);
+                }
+                else if(str8_cmp(word, str8_literal("#m10"))){
+                    word = str8_next_word(&line);
+                    pm->t_month = pm->transaction_months + 10;
+                    pm->t_month->count = atoi((char*)word.str);
+                }
+                else if(str8_cmp(word, str8_literal("#m11"))){
+                    word = str8_next_word(&line);
+                    pm->t_month = pm->transaction_months + 11;
+                    pm->t_month->count = atoi((char*)word.str);
+                }
 
-                while(line.size){
-                    String8 word = str8_next_word(&line);
+                for(s32 t_idx=0; t_idx < pm->t_month->count; ++t_idx){
+                    line = str8_next_line(ptr);
 
-                    String8Node str8_node = {0};
+                    Transaction* trans = (Transaction*)pool_next(pm->transaction_pool);
+                    dll_push_back(pm->t_month->transactions, trans);
 
-                    if(str8_contains(word, str8_literal("date"))){
-                        str8_node = str8_split(scratch.arena, word, '=');
-                        if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
-                            copy_word_to_char(trans->date, str8_literal("\0"));
+                    while(line.size){
+                        String8 word = str8_next_word(&line);
+
+                        String8Node str8_node = {0};
+
+                        if(str8_contains(word, str8_literal("date"))){
+                            str8_node = str8_split(scratch.arena, word, '=');
+                            if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+                                copy_word_to_char(trans->date, str8_literal("\0"));
+                            }
+                            else{
+                                copy_word_to_char(trans->date, str8_node.prev->str);
+                            }
                         }
-                        else{
-                            copy_word_to_char(trans->date, str8_node.prev->str);
+                        else if(str8_contains(word, str8_literal("amount"))){
+                            str8_node = str8_split(scratch.arena, word, '=');
+                            if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+                                copy_word_to_char(trans->amount, str8_literal("\0"));
+                            }
+                            else{
+                                copy_word_to_char(trans->amount, str8_node.prev->str);
+                            }
                         }
-                    }
-                    else if(str8_contains(word, str8_literal("amount"))){
-                        str8_node = str8_split(scratch.arena, word, '=');
-                        if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
-                            copy_word_to_char(trans->amount, str8_literal("\0"));
+                        else if(str8_contains(word, str8_literal("description"))){
+                            u32 count = str8_extend_to_char(&word, '\x1B');
+                            str8_advance(&line, count);
+                            str8_node = str8_split(scratch.arena, word, '=');
+                            if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+                                copy_word_to_char(trans->description, str8_literal("\0"));
+                            }
+                            else{
+                                copy_word_to_char(trans->description, str8_node.prev->str);
+                            }
                         }
-                        else{
-                            copy_word_to_char(trans->amount, str8_node.prev->str);
+                        else if(str8_contains(word, str8_literal("name"))){
+                            str8_node = str8_split(scratch.arena, word, '=');
+                            if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+                                copy_word_to_char(trans->name, str8_literal("\0"));
+                            }
+                            else{
+                                copy_word_to_char(trans->name, str8_node.prev->str);
+                            }
                         }
-                    }
-                    else if(str8_contains(word, str8_literal("description"))){
-                        u32 count = str8_extend_to_char(&word, '\x1B');
-                        str8_advance(&line, count);
-                        str8_node = str8_split(scratch.arena, word, '=');
-                        if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
-                            copy_word_to_char(trans->description, str8_literal("\0"));
-                        }
-                        else{
-                            copy_word_to_char(trans->description, str8_node.prev->str);
-                        }
-                        u32 a = 1;
-                    }
-                    else if(str8_contains(word, str8_literal("name"))){
-                        str8_node = str8_split(scratch.arena, word, '=');
-                        if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
-                            copy_word_to_char(trans->name, str8_literal("\0"));
-                        }
-                        else{
-                            copy_word_to_char(trans->name, str8_node.prev->str);
-                        }
-                        u32 a = 1;
                     }
                 }
             }
@@ -491,14 +562,22 @@ serialize_data(){
                                   "\tname=%s planned=%s\n", r->name, r->planned);
         }
     }
-    Transaction* t = pm->transactions;
+
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#transactions\n");
-    for(s32 t_idx = 0; t_idx < pm->transactions_count; ++t_idx){
-        t = t->next;
-        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
-                              "date=%s amount=%s description=%s\x1B name=%s\n",
-                              t->date, t->amount, t->description, t->name);
+    for(s32 m_idx=0; m_idx < Month_Count; ++m_idx){
+
+        pm->t_month = pm->transaction_months + m_idx;
+        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#m%i %i\n", m_idx, pm->t_month->count);
+
+        Transaction* t = pm->t_month->transactions;
+        for(s32 t_idx = 0; t_idx < pm->t_month->count; ++t_idx){
+            t = t->next;
+            arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
+                                  "date=%s amount=%s description=%s\x1B name=%s\n",
+                                  t->date, t->amount, t->description, t->name);
+        }
     }
+
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "\0");
 
     ScratchArena scratch = begin_scratch();

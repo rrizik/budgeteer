@@ -304,8 +304,8 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
         // BUDGET STUFFENINGS
         pm->category_pool    = push_pool(&pm->arena, sizeof(Category), 128);
-        pm->row_pool         = push_pool(&pm->arena, sizeof(Row), 256);
-        pm->transaction_pool = push_pool(&pm->arena, sizeof(Transaction), 256);
+        pm->row_pool         = push_pool(&pm->arena, sizeof(Row), 1024);
+        pm->transaction_pool = push_pool(&pm->arena, sizeof(Transaction), 4096);
         pm->data_arena       = push_arena(&pm->arena, MB(1));
 
         pool_free_all(pm->category_pool);
@@ -314,11 +314,16 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
         pm->categories = (Category*)pool_next(pm->category_pool);
         dll_clear(pm->categories);
-        pm->transactions = (Transaction*)pool_next(pm->transaction_pool);
-        dll_clear(pm->transactions);
+
+        for(s32 i=0; i < Month_Count; ++i){
+            TransactionMonth* t_month = pm->transaction_months + i;
+            t_month->transactions = (Transaction*)pool_next(pm->transaction_pool);
+            dll_clear(t_month->transactions);
+        }
+        pm->t_month = pm->transaction_months + pm->month_idx;
 
         // todo: look at this
-        pm->category_options = push_array(tm->options_arena, String8, 128);
+        pm->category_options = push_array(tm->options_arena, String8, 1024);
         for(s32 i=0; i < 128; ++i){
             String8* option = pm->category_options + i;
             option->str = push_array(tm->options_arena, u8, 128);
@@ -456,7 +461,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         ImGui::Text("Diff");
         ImGui::SameLine();
         ImGui::SetCursorPosX(plus_column_start);
-        if (ImGui::Button("+##add_category_button")) {
+        if(ImGui::Button("+##add_category_button")){
             Category* category = (Category*)pool_next(pm->category_pool);
             dll_push_back(pm->categories, category);
             category->rows = (Row*)pool_next(pm->row_pool);
@@ -506,16 +511,16 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                 }
             }
             ImGui::PopID();
-            if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+            if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)){
                 ImGui::SetDragDropPayload("DRAG_ROW", &c_idx, sizeof(s32));
                 ImGui::Text("%s", category->name);
                 ImGui::EndDragDropSource();
             }
-            if(ImGui::BeginDragDropTarget()) {
-                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DRAG_ROW")) {
+            if(ImGui::BeginDragDropTarget()){
+                if(const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DRAG_ROW")){
                     s32* payload_data = (s32*)payload->Data;
                     s32 from_idx = *payload_data;
-                    if(from_idx != c_idx) {
+                    if(from_idx != c_idx){
                         Category* c = pm->categories;
                         for(s32 i=0; i <= from_idx; ++i){
                             c = c->next;
@@ -569,7 +574,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             ImGui::SameLine();
             ImGui::SetCursorPosX(plus_column_start);
             ImGui::PushID(c_idx);
-            if (ImGui::Button("+##add_row_button")) {
+            if(ImGui::Button("+##add_row_button")){
                 Row* r = (Row*)pool_next(pm->row_pool);
                 dll_push_back(category->rows, r);
 
@@ -611,16 +616,16 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                     //ImGui::Button("-");
                     ImGui::PopID();
 
-                    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+                    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)){
                         ImGui::SetDragDropPayload("DRAG_ROW", &r_idx, sizeof(s32));
                         ImGui::Text("%s", row->name);
                         ImGui::EndDragDropSource();
                     }
-                    if(ImGui::BeginDragDropTarget()) {
-                        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DRAG_ROW")) {
+                    if(ImGui::BeginDragDropTarget()){
+                        if(const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DRAG_ROW")){
                             s32* payload_data = (s32*)payload->Data;
                             s32 from_idx = *payload_data;
-                            if(from_idx != r_idx) {
+                            if(from_idx != r_idx){
                                 Row* r = category->rows;
                                 for(s32 i=0; i <= from_idx; ++i){
                                     r = r->next;
@@ -721,40 +726,64 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         }
 
         //########COLUMN2######################################################################
+        //##################
+        //###TRANSACTIONS###
+        //##################
+
         ImGui::NextColumn();
         ImGui::SeparatorText("Transactions");
 
-        //ImGui::GetColumnOffset(1)
-        //ImGui::PushItemWidth(400);
-        //f32 x = get_ui_right_x();
-        //f32 width = get_ui_right_x() - ImGui::GetColumnOffset(1) - 50;
-        //if (ImGui::BeginTable("MyTable", 4, ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable, ImVec2(width, 0.0f))){
-        //    ImGui::TableSetupColumn("Date");
-        //    ImGui::TableSetupColumn("Amount");
-        //    ImGui::TableSetupColumn("Description");
-        //    ImGui::TableSetupColumn("Category");
-
-        //    ImGui::TableHeadersRow();
-
-        //    static int draggedIndex = -1;
-
-        //    for(s32 i=0; i < pm->transactions_count; ++i){
-        //        Transaction& transaction = transactions[i];
-        //        ImGui::TableNextRow();
-
-        //        ImGui::TableSetColumnIndex(0);
-        //        ImGui::Text("%i", transaction.date);
-        //        ImGui::TableSetColumnIndex(1);
-        //        ImGui::Text("%i", transaction.amount);
-        //        ImGui::TableSetColumnIndex(2);
-        //        ImGui::Text("%s", transaction.description);
-        //        ImGui::TableSetColumnIndex(3);
-        //        ImGui::Text("%s", transaction.category);
-
-        //    }
-
-        //    ImGui::EndTable();
-        //}
+        if(ImGui::BeginTabBar("##Month", ImGuiTabBarFlags_None)){
+            if(ImGui::BeginTabItem("January")){
+                pm->month_idx = Month_Jan;
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("February")){
+                pm->month_idx = Month_Feb;
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("March")){
+                pm->month_idx = Month_Mar;
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("April")){
+                pm->month_idx = Month_Apr;
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("May")){
+                pm->month_idx = Month_May;
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("June")){
+                pm->month_idx = Month_Jun;
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("July")){
+                pm->month_idx = Month_Jul;
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("August")){
+                pm->month_idx = Month_Aug;
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("September")){
+                pm->month_idx = Month_Sep;
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("October")){
+                pm->month_idx = Month_Oct;
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("November")){
+                pm->month_idx = Month_Nov;
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("December")){
+                pm->month_idx = Month_Dec;
+                ImGui::EndTabItem();
+            }
+            ImGui::EndTabBar();
+        }
 
         ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + date_column_start - 30 + input_padding);
         ImGui::Text("#");
@@ -777,11 +806,11 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
         ImGui::SameLine();
         ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + plus_expense_column_start);
-        if (ImGui::Button("+##add_transaction_button")) {
+        if(ImGui::Button("+##add_transaction_button")){
             Transaction* trans = (Transaction*)pool_next(pm->transaction_pool);
-            dll_push_back(pm->transactions, trans);
+            dll_push_back(pm->t_month->transactions, trans);
 
-            if(pm->transactions_count == 0){
+            if(pm->t_month->count == 0){
                 String8 date = str8("01/01/2024\0", 11);
                 memory_copy((void*)trans->date, (void*)date.str, date.size);
             }
@@ -791,17 +820,13 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             }
             memory_copy((void*)trans->name, (void*)pm->category_options->str, pm->category_options->size);
 
-            pm->transactions_count++;
+            pm->t_month->count++;
         }
         custom_separator();
 
-        //##################
-        //###TRANSACTIONS###
-        //##################
-
         //note: popluate amount's with 0's
-        Transaction* trans = pm->transactions;
-        for(s32 t_idx = 0; t_idx < pm->transactions_count; ++t_idx){
+        Transaction* trans = pm->t_month->transactions;
+        for(s32 t_idx = 0; t_idx < pm->t_month->count; ++t_idx){
             trans = trans->next;
 
             if(trans->amount[0] == 0){
@@ -811,8 +836,9 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         }
 
         // note: render transactions
-        trans = pm->transactions;
-        for(s32 i=0; i < pm->transactions_count; ++i){
+        pm->t_month = pm->transaction_months + pm->month_idx;
+        trans = pm->t_month->transactions;
+        for(s32 i=0; i < pm->t_month->count; ++i){
             trans = trans->next;
 
             ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + date_column_start - 30);
@@ -826,11 +852,11 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                 ImGui::EndDragDropSource();
             }
             if(ImGui::BeginDragDropTarget()){
-                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DRAG_ROW")){
+                if(const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DRAG_ROW")){
                     s32* payload_data = (s32*)payload->Data;
                     s32 from_idx = *payload_data;
                     if(from_idx != i){
-                        Transaction* t = pm->transactions;
+                        Transaction* t = pm->t_month->transactions;
                         for(s32 i=0; i <= from_idx; ++i){
                             t = t->next;
                         }
@@ -912,11 +938,11 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                     }
 
                     const bool is_selected = str8_compare(itr_option, trans_option);
-                    if (ImGui::Selectable((char*)itr_option.str, is_selected)){
+                    if(ImGui::Selectable((char*)itr_option.str, is_selected)){
                         memory_copy((void*)trans->name, (void*)itr_option.str, itr_option.size + 1);
                     }
 
-                    if (is_selected){
+                    if(is_selected){
                         ImGui::SetItemDefaultFocus();
                     }
                 }
@@ -928,8 +954,8 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             ImGui::SameLine();
             ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + plus_expense_column_start);
             std::string deleteButtonLabel = "x##remove_transaction" + std::to_string(i);
-            if (ImGui::Button(deleteButtonLabel.c_str())) {
-                pm->transactions_count--;
+            if(ImGui::Button(deleteButtonLabel.c_str())){
+                pm->t_month->count--;
 
                 dll_remove(trans);
                 pool_free(pm->transaction_pool, trans);
@@ -946,8 +972,8 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                 row = row->next;
                 row->actual = 0;
 
-                trans = pm->transactions;
-                for(s32 t_idx = 0; t_idx < pm->transactions_count; ++t_idx){
+                trans = pm->t_month->transactions;
+                for(s32 t_idx = 0; t_idx < pm->t_month->count; ++t_idx){
                     trans = trans->next;
 
                     u32 l1 = char_length(trans->name);
