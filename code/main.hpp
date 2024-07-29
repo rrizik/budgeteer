@@ -285,10 +285,47 @@ u32_buffer_from_u8_buffer(String8* u8_buffer, String8* u32_buffer){
 }
 
 static void
-copy_str8_to_char(char* c, String8 string){
+copy_word_to_char(char* c, String8 string){
+    // note: ignores new lines
     for(s32 i=0; i < string.size; ++i){
-        c[i] = string.str[i];
+        if(string.str[i] != '\n'){
+            c[i] = string.str[i];
+        }
     }
+}
+
+static String8
+str8_extend_word(String8* string){
+    String8 result = {0};
+    u64 white_count = str8_eat_whitespace(string);
+
+    u8* ptr = string->str;
+    u32 count = 0;
+    while(*ptr != ' ' && *ptr != '\n' && *ptr != '\0'){
+        count++;
+        ptr++;
+        if(count >= string->size){
+            result = {string->str, count};
+            string->str = string->str + count;
+            string->size -= count;
+            return(result);
+        }
+    }
+    if(*ptr == '\n'){
+        ++ptr; // consume newline char
+        ++count; // consume newline char
+    }
+
+    result = {string->str, count};
+    string->str = string->str + count;
+    string->size -= count;
+
+    return(result);
+
+}
+
+static void
+str8_retract_word(String8* string){
 }
 
 static void
@@ -306,79 +343,40 @@ deserialize_data(){
     }
 
     String8 data = os_file_read(scratch.arena, file);
+    String8* ptr = &data;
 
     String8 line = {0};
-    while(data.size){
-        line = str8_next_line(&data);
+    while(ptr->size){
+        line = str8_next_line(ptr);
 
-        if(str8_cmp(line, str8_literal("#budget"))){
-            line = str8_next_line(&data);
-            String8Node str8_node = {0};
-
+        if(str8_cmp(line, str8_literal("#budget\n"))){
+            line = str8_next_line(ptr);
             String8 word = str8_next_word(&line);
+
+            String8Node str8_node = {0};
             str8_node = str8_split(scratch.arena, word, '=');
-            copy_str8_to_char(budget, str8_node.prev->str);
+            copy_word_to_char(budget, str8_node.prev->str);
         }
-        else if(str8_cmp(line, str8_literal("#transactions"))){
-            while(data.size){
-                line = str8_next_line(&data);
-
-                Transaction* trans = (Transaction*)pool_next(pm->transaction_pool);
-                dll_push_back(pm->transactions, trans);
-                pm->transactions_count++;
-
-                while(line.size){
-                    String8 word = str8_next_word(&line);
-
-                    String8Node str8_node = {0};
-                    if(str8_contains(word, str8_literal("date"))){
-                        str8_node = str8_split(scratch.arena, word, '=');
-                        copy_str8_to_char(trans->date, str8_node.prev->str);
-                    }
-                    else if(str8_contains(word, str8_literal("amount"))){
-                        str8_node = str8_split(scratch.arena, word, '=');
-                        copy_str8_to_char(trans->amount, str8_node.prev->str);
-                    }
-                    else if(str8_contains(word, str8_literal("description"))){
-                        str8_node = str8_split(scratch.arena, word, '=');
-                        copy_str8_to_char(trans->description, str8_node.prev->str);
-                    }
-                    else if(str8_contains(word, str8_literal("name"))){
-                        str8_node = str8_split(scratch.arena, word, '=');
-                        copy_str8_to_char(trans->name, str8_node.prev->str);
-                    }
-                }
-            }
-        }
-
-        else if(str8_cmp(line, str8_literal("#category"))){
+        else if(str8_cmp(line, str8_literal("#category\n"))){
             Category* category = (Category*)pool_next(pm->category_pool);
             dll_push_back(pm->categories, category);
             category->rows = (Row*)pool_next(pm->row_pool);
             dll_clear(category->rows);
-
             pm->categories_count++;
 
-            line = str8_next_line(&data);
+            line = str8_next_line(ptr);
             while(line.size){
                 String8 word = str8_next_word(&line);
 
                 String8Node str8_node = {0};
                 if(str8_contains(word, str8_literal("name"))){
                     str8_node = str8_split(scratch.arena, word, '=');
-                    copy_str8_to_char(category->name, str8_node.prev->str);
-                }
-                else if(str8_contains(word, str8_literal("planned"))){
-                    str8_node = str8_split(scratch.arena, word, '=');
-                    category->planned = atoi((char*)str8_node.prev->str.str);
-                }
-                else if(str8_contains(word, str8_literal("actual"))){
-                    str8_node = str8_split(scratch.arena, word, '=');
-                    category->actual = atoi((char*)str8_node.prev->str.str);
-                }
-                else if(str8_contains(word, str8_literal("diff"))){
-                    str8_node = str8_split(scratch.arena, word, '=');
-                    category->diff = atoi((char*)str8_node.prev->str.str);
+                    if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+                        copy_word_to_char(category->name, str8_literal("\0"));
+                    }
+                    else{
+                        copy_word_to_char(category->name, str8_node.prev->str);
+                    }
                 }
                 else if(str8_contains(word, str8_literal("row_count"))){
                     str8_node = str8_split(scratch.arena, word, '=');
@@ -391,8 +389,7 @@ deserialize_data(){
             }
 
             for(s32 i=0; i < category->row_count; ++i){
-                line = str8_next_line(&data);
-                str8_eat_whitespace(&line);
+                line = str8_next_line(ptr);
 
                 Row* row = (Row*)pool_next(pm->row_pool);
                 dll_push_back(category->rows, row);
@@ -404,19 +401,73 @@ deserialize_data(){
                     String8Node str8_node = {0};
                     if(str8_contains(word, str8_literal("name"))){
                         str8_node = str8_split(scratch.arena, word, '=');
-                        copy_str8_to_char(row->name, str8_node.prev->str);
+                        if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+                            copy_word_to_char(row->name, str8_literal("\0"));
+                        }
+                        else{
+                            copy_word_to_char(row->name, str8_node.prev->str);
+                        }
                     }
                     else if(str8_contains(word, str8_literal("planned"))){
                         str8_node = str8_split(scratch.arena, word, '=');
-                        copy_str8_to_char(row->planned, str8_node.prev->str);
+                        copy_word_to_char(row->planned, str8_node.prev->str);
                     }
-                    else if(str8_contains(word, str8_literal("actual"))){
+                }
+            }
+        }
+        else if(str8_cmp(line, str8_literal("#transactions\n"))){
+            while(ptr->size){
+                line = str8_next_line(ptr);
+
+                Transaction* trans = (Transaction*)pool_next(pm->transaction_pool);
+                dll_push_back(pm->transactions, trans);
+                pm->transactions_count++;
+
+                while(line.size){
+                    String8 word = str8_next_word(&line);
+
+                    String8Node str8_node = {0};
+
+                    if(str8_contains(word, str8_literal("date"))){
                         str8_node = str8_split(scratch.arena, word, '=');
-                        row->actual = atoi((char*)str8_node.prev->str.str);
+                        if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+                            copy_word_to_char(trans->date, str8_literal("\0"));
+                        }
+                        else{
+                            copy_word_to_char(trans->date, str8_node.prev->str);
+                        }
                     }
-                    else if(str8_contains(word, str8_literal("diff"))){
+                    else if(str8_contains(word, str8_literal("amount"))){
                         str8_node = str8_split(scratch.arena, word, '=');
-                        row->diff = atoi((char*)str8_node.prev->str.str);
+                        if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+                            copy_word_to_char(trans->amount, str8_literal("\0"));
+                        }
+                        else{
+                            copy_word_to_char(trans->amount, str8_node.prev->str);
+                        }
+                    }
+                    else if(str8_contains(word, str8_literal("description"))){
+                        str8_node = str8_split(scratch.arena, word, '=');
+                        if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+                            copy_word_to_char(trans->description, str8_literal("\0"));
+                        }
+                        else{
+                            //while(!str8_contains(str8_node.prev->str, str8_literal("=")) &&
+                            //      !str8_contains(str8_node.prev->str, str8_literal("\0"))){
+                            //    str8_extend_word(&str8_node.prev->str);
+                            //}
+                            //str8_retract_word(&str8_node.prev->str);
+                            copy_word_to_char(trans->description, str8_node.prev->str);
+                        }
+                    }
+                    else if(str8_contains(word, str8_literal("name"))){
+                        str8_node = str8_split(scratch.arena, word, '=');
+                        if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+                            copy_word_to_char(trans->name, str8_literal("\0"));
+                        }
+                        else{
+                            copy_word_to_char(trans->name, str8_node.prev->str);
+                        }
                     }
                 }
             }
@@ -457,6 +508,7 @@ serialize_data(){
                               "date=%s amount=%s description=%s name=%s\n",
                               t->date, t->amount, t->description, t->name);
     }
+    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "\0");
 
     ScratchArena scratch = begin_scratch();
     String8 full_path = str8_path_append(scratch.arena, saves_path, str8_literal("budget.b"));

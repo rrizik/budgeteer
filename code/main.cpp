@@ -528,7 +528,12 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
             ImGui::SameLine();
             ImGui::SetCursorPosX(row_count_column_start + input_padding);
-            ImGui::Text("%i", category->row_count);
+            if(category->draw_rows){
+                ImGui::Text("-");
+            }
+            else{
+                ImGui::Text("%i", category->row_count);
+            }
 
             ImGui::SameLine();
 
@@ -600,8 +605,10 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
                 if(category->draw_rows){
                     ImGui::SetCursorPosX(row_count_column_start);
+                    std::string num_button = std::to_string(r_idx + 1);
                     ImGui::PushID(uid);
-                    ImGui::Button("-");
+                    ImGui::Button(num_button.c_str());
+                    //ImGui::Button("-");
                     ImGui::PopID();
 
                     if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
@@ -809,8 +816,10 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             trans = trans->next;
 
             ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + date_column_start - 30);
-            std::string num_button = std::to_string(i) + "##num_button";
+            std::string num_button = std::to_string(i + 1);
+            ImGui::PushID(i);
             ImGui::Button(num_button.c_str());
+            ImGui::PopID();
             if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)){
                 ImGui::SetDragDropPayload("DRAG_ROW", &i, sizeof(s32));
                 ImGui::Text("%i", i);
@@ -956,7 +965,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
         ImGui::End();
 
-        ImGui::ShowDemoWindow(); // Show demo window! :)
+        //ImGui::ShowDemoWindow(); // Show demo window! :)
 
         // draw everything
         draw_commands(tm->render_command_arena);
