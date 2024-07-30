@@ -330,8 +330,12 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             pm->options_count++;
         }
         *pm->category_options = str8(" \0", 2);
+        pm->first_run = true;
+        pm->tab_flags = ImGuiTabBarFlags_None;
+        pm->default_path = os_application_path(&pm->arena);
 
         deserialize_data();
+        pm->tf[pm->month_idx] = ImGuiTabItemFlags_SetSelected;
 
 
         memory.initialized = true;
@@ -743,51 +747,51 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             ImGui::PushStyleColor(ImGuiCol_TabActive, active_color);
             ImGui::PushStyleColor(ImGuiCol_TabHovered, hover_color);
 
-            if(ImGui::BeginTabItem("January")){
+            if(ImGui::BeginTabItem("January", 0, pm->tf[0])){
                 pm->month_idx = Month_Jan;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("February")){
+            if(ImGui::BeginTabItem("February", 0, pm->tf[1])){
                 pm->month_idx = Month_Feb;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("March")){
+            if(ImGui::BeginTabItem("March", 0, pm->tf[2])){
                 pm->month_idx = Month_Mar;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("April")){
+            if(ImGui::BeginTabItem("April", 0, pm->tf[3])){
                 pm->month_idx = Month_Apr;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("May")){
+            if(ImGui::BeginTabItem("May", 0, pm->tf[4])){
                 pm->month_idx = Month_May;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("June")){
+            if(ImGui::BeginTabItem("June", 0, pm->tf[5])){
                 pm->month_idx = Month_Jun;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("July")){
+            if(ImGui::BeginTabItem("July", 0, pm->tf[6])){
                 pm->month_idx = Month_Jul;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("August")){
+            if(ImGui::BeginTabItem("August", 0, pm->tf[7])){
                 pm->month_idx = Month_Aug;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("September")){
+            if(ImGui::BeginTabItem("September", 0, pm->tf[8])){
                 pm->month_idx = Month_Sep;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("October")){
+            if(ImGui::BeginTabItem("October", 0, pm->tf[9])){
                 pm->month_idx = Month_Oct;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("November")){
+            if(ImGui::BeginTabItem("November", 0, pm->tf[10])){
                 pm->month_idx = Month_Nov;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("December")){
+            if(ImGui::BeginTabItem("December", 0, pm->tf[11])){
                 pm->month_idx = Month_Dec;
                 ImGui::EndTabItem();
             }
@@ -795,6 +799,8 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             ImGui::EndTabBar();
         }
 
+
+        ImGui::Spacing();
         ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + date_column_start - 30 + input_padding);
         ImGui::Text("#");
 
@@ -831,6 +837,17 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             memory_copy((void*)trans->name, (void*)pm->category_options->str, pm->category_options->size);
 
             pm->t_month->count++;
+        }
+        ImGui::SameLine();
+        if(ImGui::Button("Load CSV##load_csv")){
+            char* file = tinyfd_openFileDialog("Open CSV File", (char*)pm->default_path.str, 0, 0, 0, 0);
+            if(file){
+                u32 length = char_length(file);
+                String8 file_path = str8(file, length);
+                pm->default_path = str8_path_pop(&pm->arena, file_path, '\\');
+
+                load_csv(file_path);
+            }
         }
         custom_separator();
 
@@ -986,9 +1003,9 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                 for(s32 t_idx = 0; t_idx < pm->t_month->count; ++t_idx){
                     trans = trans->next;
 
-                    u32 l1 = char_length(trans->name);
-                    u32 l2 = char_length(row->name);
-                    if(l1 == l2){
+                    u32 t_l = char_length(trans->name);
+                    u32 r_l = char_length(row->name);
+                    if(r_l == t_l && r_l > 0){
                         if(char_cmp(row->name, trans->name)){
                             s32 amount = atoi(trans->amount);
                             row->actual += amount;
@@ -1000,6 +1017,10 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         }
 
         ImGui::End();
+
+        for(s32 i=0; i < 12; ++i){
+            pm->tf[i] = 0;
+        }
 
         //ImGui::ShowDemoWindow(); // Show demo window! :)
 
@@ -1021,7 +1042,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
     }
 
     if(should_quit){
-        //serialize_data();
+        serialize_data();
     }
 
     ImGui_ImplDX11_Shutdown();
