@@ -176,6 +176,16 @@ typedef struct PermanentMemory{
 	String8* category_options;
     String8 default_path;
 
+    String8 date_names[32];
+    u32 date_names_count;
+    s32 date_idx;
+    String8 amount_names[32];
+    u32 amount_names_count;
+    s32 amount_idx;
+    String8 desc_names[32];
+    u32 desc_names_count;
+    s32 desc_idx;
+
     bool first_run;
 
     u32 tab_flags;
@@ -332,6 +342,18 @@ str8_extend_to_char(String8* string, char c){
     return(count);
 }
 
+static bool
+str8_strip_newline(String8* string){
+    bool result = false;
+
+    if(string->data[string->count - 1] == '\n'){
+        string->count--;
+        result = true;
+    }
+
+    return(result);
+}
+
 typedef enum ParsingState{
     ParsingState_None,
     ParsingState_Budget,
@@ -339,6 +361,10 @@ typedef enum ParsingState{
     ParsingState_Row,
     ParsingState_Transaction,
     ParsingState_Config,
+
+    ParsingState_Date,
+    ParsingState_Amount,
+    ParsingState_Description,
 
     ParsingState_Count,
 } ParsingState;
@@ -360,47 +386,150 @@ load_csv(String8 full_path){
     String8 data = os_file_read(scratch.arena, file);
     String8* ptr = &data;
 
+    state = ParsingState_None;
+    bool header = true;
     String8 line = {0};
     while(ptr->size){
         line = str8_next_line(ptr);
 
-        if(line.size){
+        if(header){
+            String8 word;
+            u32 word_count = 0;
+            while(line.size){
+                word = str8_next_csv_word(&line);
+                for(u32 i=0; i < 32; ++i){
+                    if(str8_cmp(pm->date_names[i], word)){
+                        pm->date_idx = word_count;
+                    }
+                    else if(str8_cmp(pm->amount_names[i], word)){
+                        pm->amount_idx = word_count;
+                    }
+                    else if(str8_cmp(pm->desc_names[i], word)){
+                        pm->desc_idx = word_count;
+                    }
+                }
+                ++word_count;
+            }
+            header = false;
+        }
+
+        else if(line.size){
             Transaction* trans = (Transaction*)pool_next(pm->transaction_pool);
             dll_push_back(pm->t_month->transactions, trans);
             ++pm->t_month->count;
 
+            u32 count = 0;
             String8 word;
             while(line.size){
                 word = str8_next_csv_word(&line);
-                if(word.size == 0){
-                    copy_word_to_char(trans->date, str8_literal("\0"));
+                str8_strip_newline(&word);
+                if(count == pm->date_idx){
+                    if(word.size == 0){
+                        copy_word_to_char(trans->date, str8_literal("\0"));
+                    }
+                    else{
+                        copy_word_to_char(trans->date, word);
+                    }
                 }
-                else{
-                    copy_word_to_char(trans->date, word);
+                else if(count == pm->amount_idx){
+                    if(word.size == 0){
+                        copy_word_to_char(trans->amount, str8_literal("\0"));
+                    }
+                    else{
+                        copy_word_to_char(trans->amount, word);
+                    }
+                }
+                else if(count == pm->desc_idx){
+                    if(word.size == 0){
+                        copy_word_to_char(trans->description, str8_literal("\0"));
+                    }
+                    else{
+                        copy_word_to_char(trans->description, word);
+                    }
                 }
 
-                word = str8_next_csv_word(&line);
-                if(word.size == 0){
-                    copy_word_to_char(trans->amount, str8_literal("\0"));
-                }
-                else{
-                    copy_word_to_char(trans->amount, word);
-                }
-
-                word = str8_next_csv_word(&line);
-                if(word.size == 0){
-                    copy_word_to_char(trans->description, str8_literal("\0"));
-                }
-                else{
-                    copy_word_to_char(trans->description, word);
-                }
+                ++count;
             }
         }
     }
 
+    state = ParsingState_None;
     os_file_close(file);
     end_scratch(scratch);
 }
+
+static void
+load_config(){
+    ScratchArena scratch = begin_scratch();
+    String8 full_path = str8_path_append(scratch.arena, build_path, str8_literal("config.conf"));
+
+    File file = os_file_open(full_path, GENERIC_READ, OPEN_EXISTING);
+    if(!file.size){
+        //todo: log error
+        print("Error: failed to open file <%s>\n", full_path.str);
+        os_file_close(file);
+        end_scratch(scratch);
+        return;
+    }
+
+    String8 data = os_file_read(scratch.arena, file);
+    String8* ptr = &data;
+
+    state = ParsingState_None;
+    String8 line = {0};
+    while(ptr->size){
+        line = str8_next_line(ptr);
+        if(str8_starts_with(line, str8_literal("#"))){
+            if(str8_cmp(line, str8_literal("#date\n"))){
+                state = ParsingState_Date;
+            }
+            else if(str8_cmp(line, str8_literal("#amount\n"))){
+                state = ParsingState_Amount;
+            }
+            else if(str8_cmp(line, str8_literal("#description\n"))){
+                state = ParsingState_Description;
+            }
+        }
+        else if(state == ParsingState_Date){
+            String8 word;
+            while(line.size){
+                word = str8_next_csv_word(&line);
+                String8* str = pm->date_names + pm->date_names_count;
+                ++pm->date_names_count;
+
+                memory_copy(str->data, word.data, word.count);
+                str->count = word.count;
+                str8_strip_newline(str);
+            }
+        }
+        else if(state == ParsingState_Amount){
+            String8 word;
+            while(line.size){
+                word = str8_next_csv_word(&line);
+                String8* str = pm->amount_names + pm->amount_names_count;
+                ++pm->amount_names_count;
+
+                memory_copy(str->data, word.data, word.count);
+                str->count = word.count;
+                str8_strip_newline(str);
+            }
+        }
+        else if(state == ParsingState_Description){
+            String8 word;
+            while(line.size){
+                word = str8_next_csv_word(&line);
+                String8* str = pm->desc_names + pm->desc_names_count;
+                ++pm->desc_names_count;
+
+                memory_copy(str->data, word.data, word.count);
+                str->count = word.count;
+                str8_strip_newline(str);
+            }
+        }
+    }
+    state = ParsingState_None;
+}
+
 static void
 deserialize_data(){
     ScratchArena scratch = begin_scratch();
@@ -418,6 +547,7 @@ deserialize_data(){
     String8 data = os_file_read(scratch.arena, file);
     String8* ptr = &data;
 
+    state = ParsingState_None;
     String8 line = {0};
     while(ptr->size){
         line = str8_next_line(ptr);
@@ -431,44 +561,13 @@ deserialize_data(){
             }
             else if(str8_contains(line, str8_literal("#transactions"))){
                 state = ParsingState_Transaction;
-                if(str8_contains(line, str8_literal("m0\n"))){
-                    pm->month_idx = 0;
-                }
-                else if(str8_contains(line, str8_literal("m1\n"))){
-                    pm->month_idx = 1;
-                }
-                else if(str8_contains(line, str8_literal("m2\n"))){
-                    pm->month_idx = 2;
-                }
-                else if(str8_contains(line, str8_literal("m3\n"))){
-                    pm->month_idx = 3;
-                }
-                else if(str8_contains(line, str8_literal("m4\n"))){
-                    pm->month_idx = 4;
-                }
-                else if(str8_contains(line, str8_literal("m5\n"))){
-                    pm->month_idx = 5;
-                }
-                else if(str8_contains(line, str8_literal("m6\n"))){
-                    pm->month_idx = 6;
-                }
-                else if(str8_contains(line, str8_literal("m7\n"))){
-                    pm->month_idx = 7;
-                }
-                else if(str8_contains(line, str8_literal("m8\n"))){
-                    pm->month_idx = 8;
-                }
-                else if(str8_contains(line, str8_literal("m9\n"))){
-                    pm->month_idx = 9;
-                }
-                else if(str8_contains(line, str8_literal("m10\n"))){
-                    pm->month_idx = 10;
-                }
-                else if(str8_contains(line, str8_literal("m11\n"))){
-                    pm->month_idx = 11;
+                for(s32 i=0; i < 12; ++i){
+                    if(str8_contains(line, str8_formatted(scratch.arena, "m%i", i))){
+                        pm->month_idx = i;
+                    }
                 }
             }
-            if(str8_cmp(line, str8_literal("#config\n"))){
+            else if(str8_cmp(line, str8_literal("#config\n"))){
                 state = ParsingState_Config;
             }
         }
@@ -600,6 +699,7 @@ deserialize_data(){
         }
     }
 
+    state = ParsingState_None;
     os_file_close(file);
     end_scratch(scratch);
 }

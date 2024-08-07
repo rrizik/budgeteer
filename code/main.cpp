@@ -334,6 +334,17 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         pm->tab_flags = ImGuiTabBarFlags_None;
         pm->default_path = os_application_path(&pm->arena);
 
+        for(u32 i=0; i < 32; ++i){
+            pm->date_names[i].data = push_array(global_arena, u8, 128);
+            pm->amount_names[i].data = push_array(global_arena, u8, 128);
+            pm->desc_names[i].data = push_array(global_arena, u8, 128);
+        }
+
+        pm->date_idx = -1;
+        pm->amount_idx = -1;
+        pm->desc_idx = -1;
+
+        load_config();
         deserialize_data();
         pm->tf[pm->month_idx] = ImGuiTabItemFlags_SetSelected;
 
@@ -617,7 +628,6 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                     std::string num_button = std::to_string(r_idx + 1);
                     ImGui::PushID(uid);
                     ImGui::Button(num_button.c_str());
-                    //ImGui::Button("-");
                     ImGui::PopID();
 
                     if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)){
@@ -631,6 +641,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                             s32 from_idx = *payload_data;
                             if(from_idx != r_idx){
                                 Row* r = category->rows;
+                                // todo: why do I do this?
                                 for(s32 i=0; i <= from_idx; ++i){
                                     r = r->next;
                                 }
@@ -844,9 +855,10 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             if(file){
                 u32 length = char_length(file);
                 String8 file_path = str8(file, length);
-                pm->default_path = str8_path_pop(&pm->arena, file_path, '\\');
-
-                load_csv(file_path);
+                if(str8_ends_with(file_path, str8_literal(".csv"))){
+                    pm->default_path = str8_path_pop(&pm->arena, file_path, '\\');
+                    load_csv(file_path);
+                }
             }
         }
         custom_separator();
@@ -865,24 +877,24 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         // note: render transactions
         pm->t_month = pm->transaction_months + pm->month_idx;
         trans = pm->t_month->transactions;
-        for(s32 i=0; i < pm->t_month->count; ++i){
+        for(s32 t_idx=0; t_idx < pm->t_month->count; ++t_idx){
             trans = trans->next;
 
             ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + date_column_start - 30);
-            std::string num_button = std::to_string(i + 1);
-            ImGui::PushID(i);
+            std::string num_button = std::to_string(t_idx + 1);
+            ImGui::PushID(t_idx);
             ImGui::Button(num_button.c_str());
             ImGui::PopID();
             if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)){
-                ImGui::SetDragDropPayload("DRAG_ROW", &i, sizeof(s32));
-                ImGui::Text("%i", i);
+                ImGui::SetDragDropPayload("DRAG_ROW", &t_idx, sizeof(s32));
+                ImGui::Text("%i", t_idx);
                 ImGui::EndDragDropSource();
             }
             if(ImGui::BeginDragDropTarget()){
                 if(const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DRAG_ROW")){
                     s32* payload_data = (s32*)payload->Data;
                     s32 from_idx = *payload_data;
-                    if(from_idx != i){
+                    if(from_idx != t_idx){
                         Transaction* t = pm->t_month->transactions;
                         for(s32 i=0; i <= from_idx; ++i){
                             t = t->next;
@@ -897,21 +909,21 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             std::string unique_id;
             ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + date_column_start);
             ImGui::PushItemWidth(date_column_width);
-            unique_id = "##date" + std::to_string(i);
+            unique_id = "##date" + std::to_string(t_idx);
             ImGui::InputText(unique_id.c_str(), trans->date, 128, ImGuiInputTextFlags_CharsDecimal);
             ImGui::PopItemWidth();
 
             ImGui::SameLine();
             ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + amount_column_start);
             ImGui::PushItemWidth(amount_column_width);
-            unique_id = "##amount" + std::to_string(i);
+            unique_id = "##amount" + std::to_string(t_idx);
             ImGui::InputText(unique_id.c_str(), trans->amount, 128, ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_AutoSelectAll);
             ImGui::PopItemWidth();
 
             ImGui::SameLine();
             ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + description_column_start);
             ImGui::PushItemWidth(description_column_width);
-            unique_id = "##description" + std::to_string(i);
+            unique_id = "##description" + std::to_string(t_idx);
             ImGui::InputText(unique_id.c_str(), trans->description, 128);
 
             ImGui::PopItemWidth();
@@ -954,7 +966,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             ImGui::PushStyleColor(ImGuiCol_FrameBg, ImGui::GetColorU32(frame_bg_color));
 
 
-            unique_id = "##category_select" + std::to_string(i);
+            unique_id = "##category_select" + std::to_string(t_idx);
             if(ImGui::BeginCombo(unique_id.c_str(), trans->name)){
                 for (int n = 0; n < pm->options_count; n++){
                     String8 itr_option = pm->category_options[n];
@@ -980,12 +992,26 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
             ImGui::SameLine();
             ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + plus_expense_column_start);
-            std::string deleteButtonLabel = "x##remove_transaction" + std::to_string(i);
+            std::string deleteButtonLabel = "x##remove_transaction" + std::to_string(t_idx);
             if(ImGui::Button(deleteButtonLabel.c_str())){
                 pm->t_month->count--;
 
                 dll_remove(trans);
                 pool_free(pm->transaction_pool, trans);
+            }
+            if(t_idx == 0){
+                ImGui::SameLine();
+                if(ImGui::Button("x all##x_all")){
+                    Transaction* t = pm->t_month->transactions;
+                    for(s32 t_idx=0; t_idx < pm->t_month->count; ++t_idx){
+                        t = t->next;
+                        dll_remove(t);
+                        pool_free(pm->transaction_pool, t);
+                        t = pm->t_month->transactions;
+                    }
+                    dll_clear(pm->t_month->transactions);
+                    pm->t_month->count = 0;
+                }
             }
         }
 

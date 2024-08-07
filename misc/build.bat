@@ -41,14 +41,7 @@ rem C4626: remove and understand (something to do with defer)
 IF NOT EXIST ..\build mkdir ..\build
 pushd ..\build
 rem IF NOT EXIST data move ..\data . 
-rem cl %cl_flags% %optimization% %cl_ignore_warnings% %cl_includes%       /c ..\code\main.cpp /Fo:main.obj
-rem cl %cl_imgui_flags% %optimization% %cl_ignore_warnings% %cl_includes% /c ..\code\imgui\imgui.cpp /Fo:imgui.obj
-rem cl %cl_imgui_flags% %optimization% %cl_ignore_warnings% %cl_includes% /c ..\code\imgui\imgui_impl_dx11.cpp  /Fo:imgui_impl_dx11.obj
-rem cl %cl_imgui_flags% %optimization% %cl_ignore_warnings% %cl_includes% /c ..\code\imgui\imgui_impl_win32.cpp /Fo:imgui_impl_win32.obj
-rem 
-rem cl %cl_flags% main.obj imgui.obj imgui_impl_dx11.obj imgui_impl_win32.obj /link d3d11.lib d3dcompiler.lib /out:main.exe
-
-cl /EHsc %cl_imgui_flags% %cl_includes% ..\code\main.cpp ..\code\imgui\imgui*.cpp ..\code\tinyfiledialogs\tinyfiledialogs.cpp
+cl /EHsc %cl_imgui_flags% %cl_includes% ..\code\main.cpp ..\code\imgui\imgui*.cpp ..\code\tinyfiledialogs\tinyfiledialogs.cpp /Febudgeteer.exe
 rem cl /I ..\..\base\code /Zi /nologo -std:c++latest ..\code\main.cpp ..\code\imgui\imgui*.cpp
 
 popd
