@@ -400,6 +400,11 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
 
 
+        // set window (0, 0)
+        ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
+        ImVec2 window_size = ImVec2(SCREEN_WIDTH, SCREEN_HEIGHT);
+        ImGui::SetNextWindowSize(window_size, ImGuiCond_Always);
+
         ImGui::Begin("Budgeteer");
         ImGui::Columns(2);
 

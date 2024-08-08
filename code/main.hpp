@@ -354,6 +354,22 @@ str8_strip_newline(String8* string){
     return(result);
 }
 
+static bool
+str8_strip_quotes(String8* string){
+    bool result = false;
+    if(string->data[0] == '"'){
+        string->data = string->data + 1;
+        --string->count;
+        result = true;
+    }
+    if(string->data[string->count - 1] == '"'){
+        --string->count;
+        result = true;
+    }
+
+    return(result);
+}
+
 typedef enum ParsingState{
     ParsingState_None,
     ParsingState_Budget,
@@ -444,7 +460,9 @@ load_csv(String8 full_path){
                         copy_word_to_char(trans->description, str8_literal("\0"));
                     }
                     else{
-                        copy_word_to_char(trans->description, word);
+                        String8* view = &word;
+                        str8_strip_quotes(view);
+                        copy_word_to_char(trans->description, *view);
                     }
                 }
 
