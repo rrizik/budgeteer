@@ -945,7 +945,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             ImVec4 frame_bg_color = ImGui::GetStyleColorVec4(ImGuiCol_FrameBg);
             bool found = false;
             char space[] = " ";
-            if(!char_cmp(trans->name, space)){
+            if(!char_compare(trans->name, space)){
                 category = pm->categories;
                 for(s32 c_idx = 0; c_idx < pm->categories_count && !found; ++c_idx){
                     category = category->next;
@@ -956,7 +956,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                         u32 l1 = char_length(trans->name);
                         u32 l2 = char_length(row->name);
                         if(l1 == l2){
-                            if(char_cmp(trans->name, row->name)){
+                            if(char_compare(trans->name, row->name)){
                                 found = true;
                             }
                         }
@@ -1037,7 +1037,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                     u32 t_l = char_length(trans->name);
                     u32 r_l = char_length(row->name);
                     if(r_l == t_l && r_l > 0){
-                        if(char_cmp(row->name, trans->name)){
+                        if(char_compare(row->name, trans->name)){
                             s32 amount = atoi(trans->amount);
                             row->actual += amount;
                         }

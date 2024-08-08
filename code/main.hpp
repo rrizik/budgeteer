@@ -267,7 +267,7 @@ static f32 plus_expense_column_start = 520;
 
 
 static bool
-char_cmp(char* left, char* right){
+char_compare(char* left, char* right){
     u32 count = 0;
 
     while(*left){
@@ -370,6 +370,53 @@ str8_strip_quotes(String8* string){
     return(result);
 }
 
+static String8
+str8_eat_csv_word(String8* string){
+    String8 result = {0};
+    str8_eat_spaces(string);
+
+    u64 count = 0;
+    while(string->count){
+        if((*string->data == ',') || (*string->data == '\n')){
+            break;
+        }
+
+        str8_advance(string, 1);
+        ++count;
+    }
+
+    result = {string->data - count, count};
+    str8_advance(string, 1);
+    return(result);
+}
+
+
+//static String8
+//str8_next_csv_word(String8* string){
+//    String8 result = {0};
+//    str8_eat_spaces(string);
+//
+//    u8* ptr = string->str;
+//    u32 count = 0;
+//    if(string->size){
+//        while(*ptr != ',' && *ptr != '\0'){
+//            count++;
+//            ptr++;
+//            if(count >= string->size){
+//                result = {string->str, count};
+//                str8_advance(string, count);
+//                return(result);
+//            }
+//        }
+//
+//        result = {string->str, count};
+//        // note: +1 to account for comma in csv format
+//        str8_advance(string, count + 1);
+//    }
+//
+//    return(result);
+//}
+
 typedef enum ParsingState{
     ParsingState_None,
     ParsingState_Budget,
@@ -406,21 +453,21 @@ load_csv(String8 full_path){
     bool header = true;
     String8 line = {0};
     while(ptr->size){
-        line = str8_next_line(ptr);
+        line = str8_eat_line(ptr);
 
         if(header){
             String8 word;
             u32 word_count = 0;
             while(line.size){
-                word = str8_next_csv_word(&line);
+                word = str8_eat_csv_word(&line);
                 for(u32 i=0; i < 32; ++i){
-                    if(str8_cmp(pm->date_names[i], word)){
+                    if(str8_compare(pm->date_names[i], word)){
                         pm->date_idx = word_count;
                     }
-                    else if(str8_cmp(pm->amount_names[i], word)){
+                    else if(str8_compare(pm->amount_names[i], word)){
                         pm->amount_idx = word_count;
                     }
-                    else if(str8_cmp(pm->desc_names[i], word)){
+                    else if(str8_compare(pm->desc_names[i], word)){
                         pm->desc_idx = word_count;
                     }
                 }
@@ -437,7 +484,7 @@ load_csv(String8 full_path){
             u32 count = 0;
             String8 word;
             while(line.size){
-                word = str8_next_csv_word(&line);
+                word = str8_eat_csv_word(&line);
                 str8_strip_newline(&word);
                 if(count == pm->date_idx){
                     if(word.size == 0){
@@ -496,22 +543,22 @@ load_config(){
     state = ParsingState_None;
     String8 line = {0};
     while(ptr->size){
-        line = str8_next_line(ptr);
+        line = str8_eat_line(ptr);
         if(str8_starts_with(line, str8_literal("#"))){
-            if(str8_cmp(line, str8_literal("#date\n"))){
+            if(str8_compare(line, str8_literal("#date\n"))){
                 state = ParsingState_Date;
             }
-            else if(str8_cmp(line, str8_literal("#amount\n"))){
+            else if(str8_compare(line, str8_literal("#amount\n"))){
                 state = ParsingState_Amount;
             }
-            else if(str8_cmp(line, str8_literal("#description\n"))){
+            else if(str8_compare(line, str8_literal("#description\n"))){
                 state = ParsingState_Description;
             }
         }
         else if(state == ParsingState_Date){
             String8 word;
             while(line.size){
-                word = str8_next_csv_word(&line);
+                word = str8_eat_csv_word(&line);
                 String8* str = pm->date_names + pm->date_names_count;
                 ++pm->date_names_count;
 
@@ -523,7 +570,7 @@ load_config(){
         else if(state == ParsingState_Amount){
             String8 word;
             while(line.size){
-                word = str8_next_csv_word(&line);
+                word = str8_eat_csv_word(&line);
                 String8* str = pm->amount_names + pm->amount_names_count;
                 ++pm->amount_names_count;
 
@@ -535,7 +582,7 @@ load_config(){
         else if(state == ParsingState_Description){
             String8 word;
             while(line.size){
-                word = str8_next_csv_word(&line);
+                word = str8_eat_csv_word(&line);
                 String8* str = pm->desc_names + pm->desc_names_count;
                 ++pm->desc_names_count;
 
@@ -568,13 +615,13 @@ deserialize_data(){
     state = ParsingState_None;
     String8 line = {0};
     while(ptr->size){
-        line = str8_next_line(ptr);
+        line = str8_eat_line(ptr);
 
         if(str8_starts_with(line, str8_literal("#"))){
-            if(str8_cmp(line, str8_literal("#budget\n"))){
+            if(str8_compare(line, str8_literal("#budget\n"))){
                 state = ParsingState_Budget;
             }
-            else if(str8_cmp(line, str8_literal("#category\n"))){
+            else if(str8_compare(line, str8_literal("#category\n"))){
                 state = ParsingState_Category;
             }
             else if(str8_contains(line, str8_literal("#transactions"))){
@@ -585,12 +632,12 @@ deserialize_data(){
                     }
                 }
             }
-            else if(str8_cmp(line, str8_literal("#config\n"))){
+            else if(str8_compare(line, str8_literal("#config\n"))){
                 state = ParsingState_Config;
             }
         }
         else if(state == ParsingState_Budget){
-            String8 word = str8_next_word(&line);
+            String8 word = str8_eat_word(&line);
 
             String8Node str8_node = {0};
             str8_node = str8_split(scratch.arena, word, '=');
@@ -604,12 +651,12 @@ deserialize_data(){
             ++pm->categories_count;
 
             while(line.size){
-                String8 word = str8_next_word(&line);
+                String8 word = str8_eat_word(&line);
 
                 String8Node str8_node = {0};
                 if(str8_contains(word, str8_literal("name"))){
                     str8_node = str8_split(scratch.arena, word, '=');
-                    if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+                    if(str8_compare(str8_node.prev->str, str8_node.next->str)){
                         copy_word_to_char(category->name, str8_literal("\0"));
                     }
                     else{
@@ -632,12 +679,12 @@ deserialize_data(){
             ++pm->total_rows_count;
 
             while(line.size){
-                String8 word = str8_next_word(&line);
+                String8 word = str8_eat_word(&line);
 
                 String8Node str8_node = {0};
                 if(str8_contains(word, str8_literal("name"))){
                     str8_node = str8_split(scratch.arena, word, '=');
-                    if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+                    if(str8_compare(str8_node.prev->str, str8_node.next->str)){
                         copy_word_to_char(row->name, str8_literal("\0"));
                     }
                     else{
@@ -661,12 +708,12 @@ deserialize_data(){
             }
 
             while(line.size){
-                String8 word = str8_next_word(&line);
+                String8 word = str8_eat_word(&line);
 
                 String8Node str8_node = {0};
                 if(str8_contains(word, str8_literal("date"))){
                     str8_node = str8_split(scratch.arena, word, '=');
-                    if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+                    if(str8_compare(str8_node.prev->str, str8_node.next->str)){
                         copy_word_to_char(trans->date, str8_literal("\0"));
                     }
                     else{
@@ -675,7 +722,7 @@ deserialize_data(){
                 }
                 else if(str8_contains(word, str8_literal("amount"))){
                     str8_node = str8_split(scratch.arena, word, '=');
-                    if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+                    if(str8_compare(str8_node.prev->str, str8_node.next->str)){
                         copy_word_to_char(trans->amount, str8_literal("\0"));
                     }
                     else{
@@ -686,7 +733,7 @@ deserialize_data(){
                     u32 count = str8_extend_to_char(&word, '\x1B');
                     str8_advance(&line, count);
                     str8_node = str8_split(scratch.arena, word, '=');
-                    if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+                    if(str8_compare(str8_node.prev->str, str8_node.next->str)){
                         copy_word_to_char(trans->description, str8_literal("\0"));
                     }
                     else{
@@ -695,7 +742,7 @@ deserialize_data(){
                 }
                 else if(str8_contains(word, str8_literal("name"))){
                     str8_node = str8_split(scratch.arena, word, '=');
-                    if(str8_cmp(str8_node.prev->str, str8_node.next->str)){
+                    if(str8_compare(str8_node.prev->str, str8_node.next->str)){
                         copy_word_to_char(trans->name, str8_literal("\0"));
                     }
                     else{
@@ -706,7 +753,7 @@ deserialize_data(){
         }
         else if(state == ParsingState_Config){
             while(line.size){
-                String8 word = str8_next_word(&line);
+                String8 word = str8_eat_word(&line);
 
                 String8Node str8_node = {0};
                 if(str8_contains(word, str8_literal("month_idx"))){
