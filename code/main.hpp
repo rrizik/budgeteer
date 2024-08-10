@@ -35,8 +35,6 @@
 #include "clock.cpp"
 #include "rect.cpp"
 
-#include <string>
-
 typedef enum TextureAsset{
     TextureAsset_Ship,
     TextureAsset_Bullet,
