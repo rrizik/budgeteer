@@ -857,13 +857,11 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         ImGui::SameLine();
         if(ImGui::Button("Load CSV##load_csv")){
             char* file = tinyfd_openFileDialog("Open CSV File", (char*)pm->default_path.str, 0, 0, 0, 0);
-            if(file){
-                u32 length = char_length(file);
-                String8 file_path = str8(file, length);
-                if(str8_ends_with(file_path, str8_literal(".csv"))){
-                    pm->default_path = str8_path_pop(&pm->arena, file_path, '\\');
-                    load_csv(file_path);
-                }
+            String8 file_path = str8(file, char_length(file));
+
+            if(str8_compare(str8_path_extension(file_path), str8_literal(".csv"))){
+                pm->default_path = str8_path_pop(&pm->arena, file_path, '\\');
+                load_csv(file_path);
             }
         }
         custom_separator();
@@ -1073,6 +1071,10 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
     }
 
     if(should_quit){
+        if(!os_file_exists(saves_path)){
+            os_dir_create(saves_path);
+            print("NOPE\n NOPE\n NOPE\n NOPE\n NOPE\n NOPE\n");
+        }
         serialize_data();
     }
 

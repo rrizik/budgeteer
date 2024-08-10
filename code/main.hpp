@@ -603,7 +603,7 @@ deserialize_data(){
     File file = os_file_open(full_path, GENERIC_READ, OPEN_EXISTING);
     if(!file.size){
         //todo: log error
-        print("Error: failed to open file <%s>\n", full_path.str);
+        print("Error: failed to open file <%s>\n", (char*)full_path.str);
         os_file_close(file);
         end_scratch(scratch);
         return;
@@ -816,11 +816,7 @@ serialize_data(){
 
     File file = os_file_open(full_path, GENERIC_WRITE, CREATE_ALWAYS);
     if(file.handle != INVALID_HANDLE_VALUE){
-        print("SUCCEED\n");
         os_file_write(file, arena->base, arena->at);
-    }
-    else{
-        print("FAIL\n");
     }
 
     os_file_close(file);
