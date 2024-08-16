@@ -422,21 +422,21 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         ImGui::Text("Planned: ");
         ImGui::SameLine();
         ImGui::SetCursorPosX(totals_number_start);
-        ImGui::Text("%i", total_planned);
+        ImGui::Text("%.2f", total_planned);
         ImGui::Text("Actual: ");
         ImGui::SameLine();
         ImGui::SetCursorPosX(totals_number_start);
-        ImGui::Text("%i", total_actual);
+        ImGui::Text("%.2f", total_actual);
         ImGui::Text("Diff: ");
         ImGui::SameLine();
         ImGui::SetCursorPosX(totals_number_start);
         if(total_diff < 0){
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
-            ImGui::Text("%i", total_diff);
+            ImGui::Text("%.2f", total_diff);
             ImGui::PopStyleColor();
         }
         else{
-            ImGui::Text("%i", total_diff);
+            ImGui::Text("%.2f", total_diff);
         }
 
         custom_separator();
@@ -445,11 +445,11 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         ImGui::SetCursorPosX(totals_number_start);
         if(total_goal < 0){
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
-            ImGui::Text("%i", total_goal);
+            ImGui::Text("%.2f", total_goal);
             ImGui::PopStyleColor();
         }
         else{
-            ImGui::Text("%i", total_goal);
+            ImGui::Text("%.2f", total_goal);
         }
 
         ImGui::Text("Saved: ");
@@ -457,11 +457,11 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         ImGui::SetCursorPosX(totals_number_start);
         if(total_saved < total_goal){
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
-            ImGui::Text("%i", total_saved);
+            ImGui::Text("%.2f", total_saved);
             ImGui::PopStyleColor();
         }
         else{
-            ImGui::Text("%i", total_saved);
+            ImGui::Text("%.2f", total_saved);
         }
         custom_separator();
 
@@ -511,9 +511,9 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             }
         }
 
-        s32 planned = 0;
-        s32 actual = 0;
-        s32 diff = 0;
+        f32 planned = 0;
+        f32 actual = 0;
+        f32 diff = 0;
         //#####PLAN######
         category = pm->categories;
         for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
@@ -574,18 +574,18 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
             ImGui::SameLine();
             ImGui::SetCursorPosX(planned_column_start + input_padding);
-            String8 planned_str = str8_formatted(scratch.arena, "%i", category->planned);
+            String8 planned_str = str8_formatted(scratch.arena, "%.2f", category->planned);
             ImGui::Text((char*)planned_str.data);
 
             ImGui::SameLine();
             ImGui::SetCursorPosX(actual_column_start + input_padding);
-            String8 actual_str = str8_formatted(scratch.arena, "%i", category->actual);
+            String8 actual_str = str8_formatted(scratch.arena, "%.2f", category->actual);
             ImGui::Text((char*)actual_str.data);
 
             ImGui::SameLine();
             ImGui::SetCursorPosX(diff_column_start);
             category->diff = category->planned - category->actual;
-            String8 category_diff = str8_formatted(scratch.arena, "%i", category->diff);
+            String8 category_diff = str8_formatted(scratch.arena, "%.2f", category->diff);
             if(category->diff < 0){
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
             }
@@ -626,7 +626,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
                 row = row->next;
 
-                category->planned += atoi(row->planned);
+                category->planned += atof(row->planned);
                 category->actual += row->actual;
                 String8 s_id = str8_formatted(scratch.arena, "%i%i", r_idx + 1, c_idx + 1);
                 s32 uid = atoi((char*)s_id.data);
@@ -678,19 +678,19 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                     ImGui::SameLine();
                     ImGui::SetCursorPosX(actual_column_start + input_padding);
                     ImGui::PushItemWidth(actual_column_width);
-                    String8 row_actual = str8_formatted(scratch.arena, "%i", row->actual);
+                    String8 row_actual = str8_formatted(scratch.arena, "%.2f", row->actual);
                     ImGui::Text((char*)row_actual.data);
                     ImGui::PopItemWidth();
 
                     ImGui::SameLine();
                     ImGui::SetCursorPosX(diff_column_start);
-                    s32 planned = atoi(row->planned);
-                    s32 actual = row->actual;
+                    f32 planned = atof(row->planned);
+                    f32 actual = row->actual;
                     row->diff = planned - actual;
                     if((planned - actual) < 0){
                         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
                     }
-                    String8 row_diff = str8_formatted(scratch.arena, "%i", row->diff);
+                    String8 row_diff = str8_formatted(scratch.arena, "%.2f", row->diff);
                     ImGui::Text((char*)row_diff.data);
                     if((planned - actual) < 0){
                         ImGui::PopStyleColor();
@@ -718,8 +718,8 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         total_planned = planned;
         total_actual = actual;
         total_diff = diff;
-        total_saved = atoi(budget) - total_actual;
-        total_goal = atoi(budget) - total_planned;
+        total_saved = atof(budget) - total_actual;
+        total_goal = atof(budget) - total_planned;
 
         // note: collect options
         u32 count = 1;
@@ -861,7 +861,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             char* file = tinyfd_openFileDialog("Open CSV File", (char*)pm->default_path.str, 0, 0, 0, 0);
             String8 file_path = str8(file, char_length(file));
 
-            if(str8_compare(str8_path_extension(file_path), str8_literal(".csv"))){
+            if(str8_compare_nocase(str8_path_extension(file_path), str8_literal(".csv"))){
                 pm->default_path = str8_path_pop(&pm->arena, file_path, '\\');
                 load_csv(file_path);
             }
@@ -1037,7 +1037,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                     u32 r_l = char_length(row->name);
                     if(r_l == t_l && r_l > 0){
                         if(char_compare(row->name, trans->name)){
-                            s32 amount = atoi(trans->amount);
+                            f32 amount = atof(trans->amount);
                             row->actual += amount;
                         }
                     }

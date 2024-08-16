@@ -97,11 +97,6 @@ static void memory_init();
 
 #define SCREEN_WIDTH 1920
 #define SCREEN_HEIGHT 1080
-struct Window{
-    s32 width;
-    s32 height;
-    HWND handle;
-};
 global Window window;
 static Window win32_window_create(const wchar* window_name, s32 width, s32 height);
 
@@ -121,8 +116,8 @@ typedef struct Row{
 
     char name[128];
     char planned[128];
-    s32 actual;
-    s32 diff;
+    f32 actual;
+    f32 diff;
 } Row;
 
 typedef struct Category{
@@ -131,9 +126,9 @@ typedef struct Category{
     Row* rows;
 
     char name[128];
-    s32 planned;
-    s32 actual;
-    s32 diff;
+    f32 planned;
+    f32 actual;
+    f32 diff;
 
     u32 row_count;
     bool draw_rows;
@@ -204,11 +199,11 @@ global TransientMemory* tm;
 f32 text_padding = 20;
 
 static char budget[128];
-static s32 total_planned;
-static s32 total_actual;
-static s32 total_diff;
-static s32 total_saved;
-static s32 total_goal;
+static f32 total_planned;
+static f32 total_actual;
+static f32 total_diff;
+static f32 total_saved;
+static f32 total_goal;
 
 static f32 input_padding = 4.0f;
 static f32 totals_number_start = 75.0f;
@@ -222,16 +217,16 @@ static f32 row_count_column_width = 25.0f;
 static f32 category_column_start = row_count_column_start + row_count_column_width;
 static f32 category_column_width = 100.0f;
 
-static f32 planned_column_start = category_column_start + category_column_width + 5.0f;
-static f32 planned_column_width = 50.0f;
+static f32 planned_column_start = category_column_start + category_column_width + 10.0f;
+static f32 planned_column_width = 75.0f;
 
-static f32 actual_column_start = planned_column_start + planned_column_width + 5.0f;
+static f32 actual_column_start = planned_column_start + planned_column_width + 10.0f;
 static f32 actual_column_width = 50.0f;
 
-static f32 diff_column_start = actual_column_start + actual_column_width + 5.0f;
-static f32 diff_column_width = 50.0f;
+static f32 diff_column_start = actual_column_start + actual_column_width + 10.0f;
+static f32 diff_column_width = 75.0f;
 
-static f32 plus_column_start = diff_column_start + diff_column_width + 5.0f;
+static f32 plus_column_start = diff_column_start + diff_column_width + 10.0f;
 static f32 plus_column_width = 15.0f;
 
 static f32 x_column_start = plus_column_start + plus_column_width + 5.0f;
@@ -497,6 +492,9 @@ load_csv(String8 full_path){
                         copy_word_to_char(trans->amount, str8_literal("\0"));
                     }
                     else{
+                        if(str8_starts_with(word, str8_literal("-"))){
+                            str8_advance(&word, 1);
+                        }
                         copy_word_to_char(trans->amount, word);
                     }
                 }
