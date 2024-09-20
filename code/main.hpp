@@ -170,6 +170,8 @@ typedef struct PermanentMemory{
     f32 total_saved;
     f32 total_goal;
 
+    bool draw_month_plan;
+
 } PermanentMemory, State;
 global PermanentMemory* pm;
 
