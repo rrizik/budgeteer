@@ -19,60 +19,17 @@
 
 #include "input.hpp"
 #include "clock.hpp"
-#include "rect.hpp"
-#include "bitmap.hpp"
 #include "d3d11_init.hpp"
-#include "font.hpp"
-#include "d3d11_render.hpp"
+
+#include "input.cpp"
+#include "clock.cpp"
+#include "d3d11_init.cpp"
 
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_win32.h"
 #include "imgui/imgui_impl_dx11.h"
 
 #include "tinyfiledialogs/tinyfiledialogs.h"
-
-#include "input.cpp"
-#include "clock.cpp"
-#include "rect.cpp"
-
-typedef enum TextureAsset{
-    TextureAsset_Ship,
-    TextureAsset_Bullet,
-    TextureAsset_Asteroid,
-
-    TextureAsset_Flame1,
-    TextureAsset_Flame2,
-    TextureAsset_Flame3,
-    TextureAsset_Flame4,
-    TextureAsset_Flame5,
-
-    TextureAsset_Explosion1,
-    TextureAsset_Explosion2,
-    TextureAsset_Explosion3,
-    TextureAsset_Explosion4,
-    TextureAsset_Explosion5,
-    TextureAsset_Explosion6,
-
-    TextureAsset_Font_Arial,
-    TextureAsset_Font_Golos,
-
-    TextureAsset_Count,
-} TextureAsset;
-
-typedef enum FontAsset{
-    FontAsset_Arial,
-    FontAsset_Golos,
-    FontAsset_Consolas,
-
-    FontAsset_Count,
-} FontAsset;
-
-typedef struct Assets{
-    Font    fonts[FontAsset_Count];
-    Texture textures[TextureAsset_Count];
-} Assets;
-
-static void load_assets(Arena* arena, Assets* assets);
 
 static String8 build_path;
 static String8 fonts_path;
@@ -97,6 +54,25 @@ static void memory_init();
 
 #define SCREEN_WIDTH 1920
 #define SCREEN_HEIGHT 1080
+
+typedef enum WindowType{
+    WindowType_Fullscreen,
+    WindowType_Windowed,
+} WindowType;
+
+typedef struct Window{
+    union{
+        struct{
+            f32 width;
+            f32 height;
+        };
+        v2 dim;
+    };
+    f32 aspect_ratio;
+
+    HWND handle;
+    WindowType type;
+} Window;
 global Window window;
 static Window win32_window_create(const wchar* window_name, s32 width, s32 height);
 
@@ -141,69 +117,69 @@ typedef struct Transaction{
     char date[128];
     char amount[128];
     char description[128];
-    char name[128];
+    char selection[128];
 } Transation;
 
-typedef struct TransactionMonth{
+typedef struct MonthInfo{
+    Month type;
     Transaction* transactions;
-    u32 count;
-} TransactionMonth;
+    u32 transactions_count;
+} MonthInfo;
 
 typedef struct PermanentMemory{
+    // memory
     Arena arena;
     PoolArena* category_pool;
     PoolArena* row_pool;
     PoolArena* transaction_pool;
     Arena* data_arena;
 
+    // category/rows/months/transactions
     Category* categories;
-    TransactionMonth* t_month;
-    TransactionMonth transaction_months[12];
-    u32 month_idx;
+    MonthInfo months[12];
+    MonthInfo* month;
+    u32 month_tab_idx; // selected month tab idx
 
     u32 total_rows_count;
     u32 categories_count;
     u32 transactions_count;
-    u32 options_count;
 
-	String8* category_options;
-    String8 default_path;
+    // for creating the transaction selection list
+	String8* selection_list;
+    u32 selection_count;
 
+    // for config loading
     String8 date_names[32];
     u32 date_names_count;
-    s32 date_idx;
     String8 amount_names[32];
     u32 amount_names_count;
-    s32 amount_idx;
     String8 desc_names[32];
     u32 desc_names_count;
-    s32 desc_idx;
 
-    bool first_run;
+    // for setting tab flags
+    u32 tab_flags[12];
 
-    u32 tab_flags;
-    u32 tf[12];
+    String8 default_path;
+
+    // budget totals
+    String8 budget;
+    //char budget[128];
+    f32 total_planned;
+    f32 total_actual;
+    f32 total_diff;
+    f32 total_saved;
+    f32 total_goal;
+
 } PermanentMemory, State;
 global PermanentMemory* pm;
 
 typedef struct TransientMemory{
     Arena arena;
     Arena *frame_arena;
-    Arena *render_command_arena;
     Arena *options_arena;
-    Assets assets;
 
 } TransientMemory;
 global TransientMemory* tm;
-
-f32 text_padding = 20;
-
-static char budget[128];
-static f32 total_planned;
-static f32 total_actual;
-static f32 total_diff;
-static f32 total_saved;
-static f32 total_goal;
 
 static f32 input_padding = 4.0f;
 static f32 totals_number_start = 75.0f;
@@ -274,6 +250,7 @@ char_compare(char* left, char* right){
     return(true);
 }
 
+// todo: remove this once you change to str8 for everything
 static bool
 char_only_spaces(char* src){
     u32 count = 0;
@@ -285,19 +262,7 @@ char_only_spaces(char* src){
     return(true);
 }
 
-static void
-u32_buffer_from_u8_buffer(String8* u8_buffer, String8* u32_buffer){
-    u32* base_rgba = (u32*)u32_buffer->str;
-    u8* base_a = (u8*)u8_buffer->str;
-
-    for(s32 i=0; i < u8_buffer->size; ++i){
-        //*base_rgba = (u32)(*base_a << 24 | *base_a << 16 | *base_a << 8  | *base_a << 0);
-        *base_rgba = (u32)(*base_a << 24 | 255 << 16 | 255 << 8  | 255 << 0);
-        base_rgba++;
-        base_a++;
-    }
-}
-
+// todo: remove this once you change to str8 for everything
 static void
 copy_word_to_char(char* c, String8 string){
     for(s32 i=0; i < string.size; ++i){
@@ -307,6 +272,17 @@ copy_word_to_char(char* c, String8 string){
     if(c[string.size - 1] == '\n' || c[string.size - 1] == '\x1B'){
         c[string.size - 1] = '\0';
     }
+}
+
+// note: this is dangeours if dst doesn't have enough memory
+static void
+str8_copy(String8* dst, String8* src){
+    s32 count = 0;
+    while(src->count != count){
+        dst->data[count] = src->data[count];
+        ++count;
+    }
+    dst->count = src->count;
 }
 
 static u32
@@ -335,6 +311,7 @@ str8_extend_to_char(String8* string, char c){
     return(count);
 }
 
+// todo: verify that I need to do this
 static bool
 str8_strip_newline(String8* string){
     bool result = false;
@@ -347,6 +324,7 @@ str8_strip_newline(String8* string){
     return(result);
 }
 
+// todo: verify that I need to do this
 static bool
 str8_strip_quotes(String8* string){
     bool result = false;
@@ -364,7 +342,7 @@ str8_strip_quotes(String8* string){
 }
 
 static String8
-str8_eat_csv_word(String8* string){
+str8_eat_word_csv(String8* string){
     String8 result = {0};
     str8_eat_spaces(string);
 
@@ -443,6 +421,9 @@ load_csv(String8 full_path){
     String8* ptr = &data;
 
     state = ParsingState_None;
+    s32 date_idx = -1;
+    s32 amount_idx = -1;
+    s32 desc_idx = -1;
     bool header = true;
     String8 line = {0};
     while(ptr->size){
@@ -452,16 +433,16 @@ load_csv(String8 full_path){
             String8 word;
             u32 word_count = 0;
             while(line.size){
-                word = str8_eat_csv_word(&line);
+                word = str8_eat_word_csv(&line);
                 for(u32 i=0; i < 32; ++i){
                     if(str8_compare(pm->date_names[i], word)){
-                        pm->date_idx = word_count;
+                        date_idx = word_count;
                     }
                     else if(str8_compare(pm->amount_names[i], word)){
-                        pm->amount_idx = word_count;
+                        amount_idx = word_count;
                     }
                     else if(str8_compare(pm->desc_names[i], word)){
-                        pm->desc_idx = word_count;
+                        desc_idx = word_count;
                     }
                 }
                 ++word_count;
@@ -471,15 +452,15 @@ load_csv(String8 full_path){
 
         else if(line.size){
             Transaction* trans = (Transaction*)pool_next(pm->transaction_pool);
-            dll_push_back(pm->t_month->transactions, trans);
-            ++pm->t_month->count;
+            dll_push_back(pm->month->transactions, trans);
+            ++pm->month->transactions_count;
 
             u32 count = 0;
             String8 word;
             while(line.size){
-                word = str8_eat_csv_word(&line);
+                word = str8_eat_word_csv(&line);
                 str8_strip_newline(&word);
-                if(count == pm->date_idx){
+                if(count == date_idx){
                     if(word.size == 0){
                         copy_word_to_char(trans->date, str8_literal("\0"));
                     }
@@ -487,7 +468,7 @@ load_csv(String8 full_path){
                         copy_word_to_char(trans->date, word);
                     }
                 }
-                else if(count == pm->amount_idx){
+                else if(count == amount_idx){
                     if(word.size == 0){
                         copy_word_to_char(trans->amount, str8_literal("\0"));
                     }
@@ -498,7 +479,7 @@ load_csv(String8 full_path){
                         copy_word_to_char(trans->amount, word);
                     }
                 }
-                else if(count == pm->desc_idx){
+                else if(count == desc_idx){
                     if(word.size == 0){
                         copy_word_to_char(trans->description, str8_literal("\0"));
                     }
@@ -520,7 +501,7 @@ load_csv(String8 full_path){
 }
 
 static void
-load_config(){
+load_config(void){
     ScratchArena scratch = begin_scratch();
     String8 full_path = str8_path_append(scratch.arena, build_path, str8_literal("config.conf"));
 
@@ -554,11 +535,11 @@ load_config(){
         else if(state == ParsingState_Date){
             String8 word;
             while(line.size){
-                word = str8_eat_csv_word(&line);
+                word = str8_eat_word_csv(&line);
                 String8* str = pm->date_names + pm->date_names_count;
                 ++pm->date_names_count;
 
-                memory_copy(str->data, word.data, word.count);
+                memcpy(str->data, word.data, word.count);
                 str->count = word.count;
                 str8_strip_newline(str);
             }
@@ -566,11 +547,11 @@ load_config(){
         else if(state == ParsingState_Amount){
             String8 word;
             while(line.size){
-                word = str8_eat_csv_word(&line);
+                word = str8_eat_word_csv(&line);
                 String8* str = pm->amount_names + pm->amount_names_count;
                 ++pm->amount_names_count;
 
-                memory_copy(str->data, word.data, word.count);
+                memcpy(str->data, word.data, word.count);
                 str->count = word.count;
                 str8_strip_newline(str);
             }
@@ -578,11 +559,11 @@ load_config(){
         else if(state == ParsingState_Description){
             String8 word;
             while(line.size){
-                word = str8_eat_csv_word(&line);
+                word = str8_eat_word_csv(&line);
                 String8* str = pm->desc_names + pm->desc_names_count;
                 ++pm->desc_names_count;
 
-                memory_copy(str->data, word.data, word.count);
+                memcpy(str->data, word.data, word.count);
                 str->count = word.count;
                 str8_strip_newline(str);
             }
@@ -592,7 +573,7 @@ load_config(){
 }
 
 static void
-deserialize_data(){
+deserialize_data(void){
     ScratchArena scratch = begin_scratch();
     String8 full_path = str8_path_append(scratch.arena, saves_path, str8_literal("budget.b"));
 
@@ -608,6 +589,7 @@ deserialize_data(){
     String8 data = os_file_read(scratch.arena, file);
     String8* ptr = &data;
 
+    s32 month_idx = 0;
     state = ParsingState_None;
     String8 line = {0};
     while(ptr->size){
@@ -624,7 +606,7 @@ deserialize_data(){
                 state = ParsingState_Transaction;
                 for(s32 i=0; i < 12; ++i){
                     if(str8_contains(line, str8_formatted(scratch.arena, "m%i", i))){
-                        pm->month_idx = i;
+                        month_idx = i;
                     }
                 }
             }
@@ -637,7 +619,9 @@ deserialize_data(){
 
             String8Node str8_node = {0};
             str8_node = str8_split(scratch.arena, word, '=');
-            copy_word_to_char(budget, str8_node.prev->str);
+            //pm->budget = str8_node.prev->str;
+            String8 string = str8_node.prev->str;
+            str8_copy(&pm->budget, &string);
         }
         else if(state == ParsingState_Category){
             Category* category = (Category*)pool_next(pm->category_pool);
@@ -651,6 +635,10 @@ deserialize_data(){
 
                 String8Node str8_node = {0};
                 if(str8_contains(word, str8_literal("name"))){
+                    if(!str8_contains_byte(word, '\x1B')){
+                        u32 count = str8_extend_to_char(&word, '\x1B');
+                        str8_advance(&line, count);
+                    }
                     str8_node = str8_split(scratch.arena, word, '=');
                     if(str8_compare(str8_node.prev->str, str8_node.next->str)){
                         copy_word_to_char(category->name, str8_literal("\0"));
@@ -679,6 +667,10 @@ deserialize_data(){
 
                 String8Node str8_node = {0};
                 if(str8_contains(word, str8_literal("name"))){
+                    if(!str8_contains_byte(word, '\x1B')){
+                        u32 count = str8_extend_to_char(&word, '\x1B');
+                        str8_advance(&line, count);
+                    }
                     str8_node = str8_split(scratch.arena, word, '=');
                     if(str8_compare(str8_node.prev->str, str8_node.next->str)){
                         copy_word_to_char(row->name, str8_literal("\0"));
@@ -694,13 +686,16 @@ deserialize_data(){
             }
         }
         else if(state == ParsingState_Transaction){
-            pm->t_month = pm->transaction_months + pm->month_idx;
+            pm->month = pm->months + month_idx;
+            if(month_idx == 9){
+                s32 a = 1;
+            }
 
             Transaction* trans;
             if(line.size){
                 trans = (Transaction*)pool_next(pm->transaction_pool);
-                dll_push_back(pm->t_month->transactions, trans);
-                ++pm->t_month->count;
+                dll_push_back(pm->month->transactions, trans);
+                ++pm->month->transactions_count;
             }
 
             while(line.size){
@@ -726,8 +721,10 @@ deserialize_data(){
                     }
                 }
                 else if(str8_contains(word, str8_literal("description"))){
-                    u32 count = str8_extend_to_char(&word, '\x1B');
-                    str8_advance(&line, count);
+                    if(!str8_contains_byte(word, '\x1B')){
+                        u32 count = str8_extend_to_char(&word, '\x1B');
+                        str8_advance(&line, count);
+                    }
                     str8_node = str8_split(scratch.arena, word, '=');
                     if(str8_compare(str8_node.prev->str, str8_node.next->str)){
                         copy_word_to_char(trans->description, str8_literal("\0"));
@@ -736,13 +733,17 @@ deserialize_data(){
                         copy_word_to_char(trans->description, str8_node.prev->str);
                     }
                 }
-                else if(str8_contains(word, str8_literal("name"))){
+                else if(str8_contains(word, str8_literal("selection"))){
+                    if(!str8_contains_byte(word, '\x1B')){
+                        u32 count = str8_extend_to_char(&word, '\x1B');
+                        str8_advance(&line, count);
+                    }
                     str8_node = str8_split(scratch.arena, word, '=');
                     if(str8_compare(str8_node.prev->str, str8_node.next->str)){
-                        copy_word_to_char(trans->name, str8_literal("\0"));
+                        copy_word_to_char(trans->selection, str8_literal("\0"));
                     }
                     else{
-                        copy_word_to_char(trans->name, str8_node.prev->str);
+                        copy_word_to_char(trans->selection, str8_node.prev->str);
                     }
                 }
             }
@@ -752,9 +753,9 @@ deserialize_data(){
                 String8 word = str8_eat_word(&line);
 
                 String8Node str8_node = {0};
-                if(str8_contains(word, str8_literal("month_idx"))){
+                if(str8_contains(word, str8_literal("month_tab_idx"))){
                     str8_node = str8_split(scratch.arena, word, '=');
-                    pm->month_idx = atoi((char*)str8_node.prev->str.str);
+                    pm->month_tab_idx = atoi((char*)str8_node.prev->str.str);
                 }
             }
         }
@@ -766,44 +767,45 @@ deserialize_data(){
 }
 
 static void
-serialize_data(){
+serialize_data(void){
     Arena* arena = pm->data_arena;
     Category* c = pm->categories;
 
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#budget\n");
-    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "budget=%s\n", budget);
+    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "budget=%s\n", pm->budget.str);
+    //arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "budget=%s\n", pm->budget);
 
     for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
         c = c->next;
 
         arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#category\n");
         arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
-                              "name=%s draw_rows=%d\n", c->name, c->draw_rows);
+                              "name=%s\x1B draw_rows=%d\n", c->name, c->draw_rows);
 
         Row* r = c->rows;
         for(s32 r_idx = 0; r_idx < c->row_count; ++r_idx){
             r = r->next;
             arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
-                                  "\tname=%s planned=%s\n", r->name, r->planned);
+                                  "\tname=%s\x1B planned=%s\n", r->name, r->planned);
         }
     }
 
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#transactions\n");
     for(s32 m_idx=0; m_idx < Month_Count; ++m_idx){
 
-        pm->t_month = pm->transaction_months + m_idx;
+        pm->month = pm->months + m_idx;
         arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#transactions_m%i\n", m_idx);
 
-        Transaction* t = pm->t_month->transactions;
-        for(s32 t_idx = 0; t_idx < pm->t_month->count; ++t_idx){
+        Transaction* t = pm->month->transactions;
+        for(s32 t_idx = 0; t_idx < pm->month->transactions_count; ++t_idx){
             t = t->next;
             arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
-                                  "date=%s amount=%s description=%s\x1B name=%s\n",
-                                  t->date, t->amount, t->description, t->name);
+                                  "date=%s amount=%s description=%s\x1B selection=%s\x1B\n",
+                                  t->date, t->amount, t->description, t->selection);
         }
     }
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#config\n");
-    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "month_idx=%i\n", pm->month_idx);
+    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "month_tab_idx=%i\n", pm->month_tab_idx);
 
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "\0");
 

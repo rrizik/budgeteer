@@ -30,7 +30,7 @@ d3d_load_shader(String8 shader_path, D3D11_INPUT_ELEMENT_DESC* il, u32 layout_co
 
     ScratchArena scratch = begin_scratch();
     //String8 utf8_shader_path = str8_path_append(scratch.arena, path_shaders, shader_file);
-    String16 utf16_shader_path = os_utf8_utf16(scratch.arena, shader_path);
+    String16 utf16_shader_path = os_utf16_from_utf8(scratch.arena, shader_path);
 
     ID3DBlob* vs_blob, *ps_blob, *error;
     hr = D3DCompileFromFile((wchar*)utf16_shader_path.str, 0, 0, "vs_main", "vs_5_0", shader_compile_flags, 0, &vs_blob, &error);
@@ -181,12 +181,6 @@ d3d_init(HWND window_handle, s32 width, s32 height){
     d3d_viewport.MaxDepth = 1.0;
 
     // ---------------------------------------------------------------------------------
-    // Load Shaders
-    // ---------------------------------------------------------------------------------
-	d3d_load_shader(str8_literal("shaders\\2d_texture_shader.hlsl"), il_2d_textured, 3, &d3d_2d_textured_vs, &d3d_2d_textured_ps, &d3d_2d_textured_il);
-	d3d_load_shader(str8_literal("shaders\\2d_quad_shader.hlsl"), layout_2d_quad, 2, &d3d_2d_quad_vs, &d3d_2d_quad_ps, &d3d_2d_quad_il);
-
-    // ---------------------------------------------------------------------------------
     // Vertex Buffers
     // ---------------------------------------------------------------------------------
     {
@@ -283,33 +277,6 @@ d3d_init(HWND window_handle, s32 width, s32 height){
     dxgiAdapter->Release();
     dxgiFactory->Release();
     dxgiDevice->Release();
-}
-
-static void
-init_texture_resource(ID3D11ShaderResourceView** shader_resource, Bitmap* bitmap){
-    D3D11_TEXTURE2D_DESC desc = {
-        .Width = (u32)bitmap->width,
-        .Height = (u32)bitmap->height,
-        .MipLevels = 1,
-        .ArraySize = 1,
-        .Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,
-        .SampleDesc = {1, 0},
-        .Usage = D3D11_USAGE_IMMUTABLE,
-        .BindFlags = D3D11_BIND_SHADER_RESOURCE,
-    };
-
-    D3D11_SUBRESOURCE_DATA data = {
-        .pSysMem = bitmap->base,
-        .SysMemPitch = (u32)bitmap->stride,
-    };
-
-    ID3D11Texture2D* texture;
-    hr = d3d_device->CreateTexture2D(&desc, &data, &texture);
-assert_hr(hr);
-
-    hr = d3d_device->CreateShaderResourceView(texture, 0, shader_resource);
-    assert_hr(hr);
-    texture->Release();
 }
 
 static void

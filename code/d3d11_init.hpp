@@ -134,19 +134,11 @@ static RGBA WHITE =   {1.0f, 1.0f, 1.0f,  1.0f};
 static RGBA BLACK =   {0.0f, 0.0f, 0.0f,  1.0f};
 static RGBA BACKGROUND_COLOR =   {1.0f/255.0f, 1.0f/255.0f, 1.0f/255.0f};
 static RGBA ARMY_GREEN =   {0.25f, 0.25f, 0.23f,  1.0f};
-//static RGBA BACKGROUND_COLOR = {0.2f, 0.29f, 0.29f, 1.0f};
-
-static RGBA CONSOLE_INPUT_BACKGROUND_COLOR = {20/255.0f, 20/255.0f, 20/255.0f, 1.0f};
-static RGBA CONSOLE_OUTPUT_BACKGROUND_COLOR = {29/255.0f, 29/255.0f, 29/255.0f, 1.0f};
-static RGBA CONSOLE_TEXT_INPUT_COLOR = {215/255.0f, 175/255.0f, 135/255.0f, 1.0f};
-static RGBA CONSOLE_TEXT_OUTPUT_COLOR = {215/255.0f, 175/255.0f, 135/255.0f, 1.0f};
-static RGBA CONSOLE_CURSOR_COLOR = {226/255.0f, 226/255.0f, 226/255.0f, 1.0f};
 
 static void d3d_init(HWND handle, s32 width, s32 height);
 static void d3d_init_debug_stuff();
 static void d3d_load_shader(String8 shader_path, D3D11_INPUT_ELEMENT_DESC* il, u32 layout_count, ID3D11VertexShader** d3d_vs, ID3D11PixelShader** d3d_ps, ID3D11InputLayout** d3d_il);
 static void d3d_load_shader2(String8 shader_path, ID3D11VertexShader** d3d_vs, ID3D11PixelShader** d3d_ps);
-static void init_texture_resource(ID3D11ShaderResourceView** shader_resource, Bitmap* bitmap);
 static void d3d_release();
 
 #endif
