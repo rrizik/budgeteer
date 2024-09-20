@@ -13,9 +13,6 @@ copy /Y ..\build\budgeteer.exe .
 copy /Y ..\build\config.conf .
 copy /Y ..\README.md .
 
-:: copy over shaders dir. This will be gone soon.
-xcopy /Y ..\build\shaders .\shaders /E /I /H
-
 :: Delete the existing zip file if it exists
 if exist budgeteer.zip del budgeteer.zip
 

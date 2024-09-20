@@ -4,11 +4,7 @@
 static void
 init_paths(Arena* arena){
     build_path = os_application_path(global_arena);
-    fonts_path = str8_path_append(global_arena, build_path, str8_literal("fonts"));
-    shaders_path = str8_path_append(global_arena, build_path, str8_literal("shaders"));
     saves_path = str8_path_append(global_arena, build_path, str8_literal("saves"));
-    sprites_path = str8_path_append(global_arena, build_path, str8_literal("sprites"));
-    sounds_path = str8_path_append(global_arena, build_path, str8_literal("sounds"));
 }
 
 static void
@@ -278,6 +274,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             month->transactions = (Transaction*)pool_next(pm->transaction_pool);
             dll_clear(month->transactions);
         }
+        pm->month = pm->months + pm->month_tab_idx;
 
         // give selection list memory
         pm->selection_list = push_array(tm->options_arena, String8, 1024);
@@ -821,6 +818,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         custom_separator();
 
         //note: popluate amount's with 0's
+        pm->month = pm->months + pm->month_tab_idx;
         Transaction* trans = pm->month->transactions;
         for(s32 t_idx = 0; t_idx < pm->month->transactions_count; ++t_idx){
             trans = trans->next;
@@ -832,7 +830,6 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         }
 
         // note: render transactions
-        pm->month = pm->months + pm->month_tab_idx;
         trans = pm->month->transactions;
         for(s32 t_idx=0; t_idx < pm->month->transactions_count; ++t_idx){
             trans = trans->next;
@@ -906,7 +903,6 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                         Row* row = category->rows;
                         for(s32 r_idx = 0; r_idx < category->row_count && !found; ++r_idx){
                             row = row->next;
-                            //u32 trans_length = char_length(trans->selection);
                             String8 trans_selection = str8(trans->selection, char_length(trans->selection));
 
                             String8 cat_part = str8_format(tm->frame_arena, "%s: ", category->name);
@@ -994,14 +990,20 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                 for(s32 t_idx = 0; t_idx < pm->month->transactions_count; ++t_idx){
                     trans = trans->next;
 
-                    u32 t_l = char_length(trans->selection);
-                    u32 r_l = char_length(row->name);
-                    if(r_l == t_l && r_l > 0){
-                        if(char_compare(row->name, trans->selection)){
+                    u32 t_length = char_length(trans->selection);
+                    String8 trans_selection = str8(trans->selection, t_length);
+
+                    u32 r_length = char_length(row->name);
+                    String8 cat_part = str8_format(tm->frame_arena, "%s: ", category->name);
+                    String8 name_part = str8(row->name, r_length);
+                    String8 full = str8_concatenate(tm->frame_arena, cat_part, name_part);
+                    //if(r_l == t_l && r_l > 0){
+                        if(str8_compare(full, trans_selection)){
+                        //if(char_compare(row->name, trans->selection)){
                             f32 amount = atof(trans->amount);
                             row->actual += amount;
                         }
-                    }
+                    //}
                 }
 
             }

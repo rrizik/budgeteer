@@ -580,7 +580,7 @@ deserialize_data(void){
     File file = os_file_open(full_path, GENERIC_READ, OPEN_EXISTING);
     if(!file.size){
         //todo: log error
-        print("Error: failed to open file <%s>\n", (char*)full_path.str);
+        print("Error: file size 0, no data to load. <%s>\n", (char*)full_path.str);
         os_file_close(file);
         end_scratch(scratch);
         return;
@@ -619,9 +619,8 @@ deserialize_data(void){
 
             String8Node str8_node = {0};
             str8_node = str8_split(scratch.arena, word, '=');
-            //pm->budget = str8_node.prev->str;
-            String8 string = str8_node.prev->str;
-            str8_copy(&pm->budget, &string);
+            str8_copy(&pm->budget, &str8_node.prev->str);
+            //copy_word_to_char(pm->budget, str8_node.prev->str);
         }
         else if(state == ParsingState_Category){
             Category* category = (Category*)pool_next(pm->category_pool);
