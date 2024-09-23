@@ -293,6 +293,9 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
         pm->budget.data = push_array(global_arena, u8, 128);
         pm->draw_month_plan = true;
+        pm->default_button_color = ImGui::GetStyleColorVec4(ImGuiCol_Button);
+        pm->default_button_hovered_color = ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered);
+        pm->epsilon = 0.001;
 
         load_config();
         deserialize_data();
@@ -360,16 +363,17 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         ImGui::Columns(2);
         ImGui::BeginChild("Column1", ImVec2(0, 0), true, ImGuiWindowFlags_AlwaysVerticalScrollbar);
 
-        ImGui::SeparatorText("Totals");
-        ImGui::Text("Budget:");
+        ImGui::Text("Monthly Budget:");
         ImGui::SameLine();
-        ImGui::SetCursorPosX(totals_number_start - input_padding);
+        //ImGui::SetCursorPosX(totals_number_start - input_padding);
         ImGui::PushItemWidth(75);
         //if(pm->budget[0] == 0){
         //    pm->budget[0] = '0';
         //    pm->budget[1] = '\0';
         //}
         ImGui::InputText("##Budget", (char*)pm->budget.str, 128, ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_AutoSelectAll);
+
+        ImGui::SeparatorText("Monthly Totals");
         ImGui::Text("Planned: ");
         ImGui::SameLine();
         ImGui::SetCursorPosX(totals_number_start);
@@ -581,6 +585,23 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                 }
                 ImGui::PopID();
 
+                ImGui::SameLine();
+                ImGui::SetCursorPosX(m_column_start);
+                ImGui::PushID(c_idx);
+                if(category->muted){
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.1f, 0.0f, 1.0f));
+                }
+                else{
+                    ImGui::PushStyleColor(ImGuiCol_Button, pm->default_button_color);
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, pm->default_button_hovered_color);
+                }
+                if(ImGui::Button("m##mute_category")){
+                    category->muted = !category->muted;
+                }
+                ImGui::PopID();
+                ImGui::PopStyleColor(2);
+
 
                 Row* row = category->rows;
                 for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
@@ -643,13 +664,12 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                         ImGui::SameLine();
                         ImGui::SetCursorPosX(diff_column_start);
                         f32 planned = atof(row->planned);
-                        f32 actual = row->actual;
-                        if((planned - actual) < 0){
+                        if((planned - row->actual) < 0){
                             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
                         }
                         String8 row_diff = str8_formatted(scratch.arena, "%.2f", row->diff);
                         ImGui::Text((char*)row_diff.data);
-                        if((planned - actual) < 0){
+                        if((planned - row->actual) < 0){
                             ImGui::PopStyleColor();
                         }
 
@@ -664,6 +684,23 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                             pool_free(pm->row_pool, row);
                         }
                         ImGui::PopID();
+
+                        ImGui::SameLine();
+                        ImGui::SetCursorPosX(m_column_start);
+                        ImGui::PushID(uid);
+                        if(row->muted){
+                            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+                            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.1f, 0.0f, 1.0f));
+                        }
+                        else{
+                            ImGui::PushStyleColor(ImGuiCol_Button, pm->default_button_color);
+                            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, pm->default_button_hovered_color);
+                        }
+                        if(ImGui::Button("m##mute_row")){
+                            row->muted = !row->muted;
+                        }
+                        ImGui::PopID();
+                        ImGui::PopStyleColor(2);
                     }
                 }
                 custom_separator();
@@ -773,7 +810,8 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
 
         ImGui::Spacing();
-        ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + date_column_start - 30 + input_padding);
+        //ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + date_column_start - 30 + input_padding);
+        ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + hash_column_start + input_padding);
         ImGui::Text("#");
 
         ImGui::SameLine();
@@ -810,6 +848,38 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
             pm->month->transactions_count++;
         }
+
+        ImGui::SameLine();
+        //ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + plus_expense_column_start);
+        if(ImGui::Button("x##x_all_transactions")){
+            Transaction* t = pm->month->transactions;
+            for(s32 t_idx=0; t_idx < pm->month->transactions_count; ++t_idx){
+                t = t->next;
+                dll_remove(t);
+                pool_free(pm->transaction_pool, t);
+                t = pm->month->transactions;
+            }
+            dll_clear(pm->month->transactions);
+            pm->month->transactions_count = 0;
+        }
+
+        ImGui::SameLine();
+        //ImGui::SetCursorPosX(m_column_start);
+        ImGui::PushID(100000);
+        if(pm->month->muted){
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.1f, 0.0f, 1.0f));
+        }
+        else{
+            ImGui::PushStyleColor(ImGuiCol_Button, pm->default_button_color);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, pm->default_button_hovered_color);
+        }
+        if(ImGui::Button("m##mute_month")){
+            pm->month->muted = !pm->month->muted;
+        }
+        ImGui::PopStyleColor(2);
+        ImGui::PopID();
+
         ImGui::SameLine();
         if(ImGui::Button("Load CSV##load_csv")){
             char* file = tinyfd_openFileDialog("Open CSV File", (char*)pm->default_path.str, 0, 0, 0, 0);
@@ -959,7 +1029,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             }
 
             ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + plus_expense_column_start);
+            ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + x_expense_column_start);
             String8 delete_id = str8_formatted(scratch.arena, "x##remove_transaction%i", t_idx);
             if(ImGui::Button((char*)delete_id.data)){
                 pm->month->transactions_count--;
@@ -967,20 +1037,38 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                 dll_remove(trans);
                 pool_free(pm->transaction_pool, trans);
             }
-            if(t_idx == 0){
-                ImGui::SameLine();
-                if(ImGui::Button("x all##x_all")){
-                    Transaction* t = pm->month->transactions;
-                    for(s32 t_idx=0; t_idx < pm->month->transactions_count; ++t_idx){
-                        t = t->next;
-                        dll_remove(t);
-                        pool_free(pm->transaction_pool, t);
-                        t = pm->month->transactions;
-                    }
-                    dll_clear(pm->month->transactions);
-                    pm->month->transactions_count = 0;
-                }
+
+            ImGui::SameLine();
+            ImGui::PushID(t_idx);
+            if(trans->muted){
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.1f, 0.0f, 1.0f));
             }
+            else{
+                ImGui::PushStyleColor(ImGuiCol_Button, pm->default_button_color);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, pm->default_button_hovered_color);
+            }
+            if(ImGui::Button("m##mute_transaction")){
+                trans->muted = !trans->muted;
+            }
+            ImGui::PopStyleColor(2);
+            ImGui::PopID();
+
+// HERE
+            //if(t_idx == 0){
+            //    ImGui::SameLine();
+            //    if(ImGui::Button("x all##x_all")){
+            //        Transaction* t = pm->month->transactions;
+            //        for(s32 t_idx=0; t_idx < pm->month->transactions_count; ++t_idx){
+            //            t = t->next;
+            //            dll_remove(t);
+            //            pool_free(pm->transaction_pool, t);
+            //            t = pm->month->transactions;
+            //        }
+            //        dll_clear(pm->month->transactions);
+            //        pm->month->transactions_count = 0;
+            //    }
+            //}
         }
 
         ImGui::EndChild();
@@ -999,26 +1087,26 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                 row = row->next;
                 row->actual = 0;
 
-                trans = pm->month->transactions;
-                for(s32 t_idx = 0; t_idx < pm->month->transactions_count; ++t_idx){
-                    trans = trans->next;
+                if(!pm->month->muted){
+                    trans = pm->month->transactions;
+                    for(s32 t_idx = 0; t_idx < pm->month->transactions_count; ++t_idx){
+                        trans = trans->next;
+                        if(!trans->muted){
+                            u32 t_length = char_length(trans->selection);
+                            String8 trans_selection = str8(trans->selection, t_length);
 
-                    u32 t_length = char_length(trans->selection);
-                    String8 trans_selection = str8(trans->selection, t_length);
-
-                    u32 r_length = char_length(row->name);
-                    String8 cat_part = str8_format(tm->frame_arena, "%s: ", category->name);
-                    String8 name_part = str8(row->name, r_length);
-                    String8 full = str8_concatenate(tm->frame_arena, cat_part, name_part);
-                    //if(r_l == t_l && r_l > 0){
-                        if(str8_compare(full, trans_selection)){
-                        //if(char_compare(row->name, trans->selection)){
-                            f32 amount = atof(trans->amount);
-                            row->actual += amount;
+                            u32 r_length = char_length(row->name);
+                            String8 cat_part = str8_format(tm->frame_arena, "%s: ", category->name);
+                            String8 name_part = str8(row->name, r_length);
+                            String8 full = str8_concatenate(tm->frame_arena, cat_part, name_part);
+                            if(str8_compare(full, trans_selection)){
+                                f32 amount = atof(trans->amount);
+                                row->actual += amount;
+                                row->actual = round_to_hundredth(row->actual);
+                            }
                         }
-                    //}
+                    }
                 }
-
             }
         }
 
@@ -1027,7 +1115,6 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         f32 total_actual = 0.0f;
         f32 total_diff = 0.0f;
         category = pm->categories;
-        //Category* category = pm->categories;
         for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
             category = category->next;
 
@@ -1038,21 +1125,29 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             Row* row = category->rows;
             for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
                 row = row->next;
-                row->diff = atof(row->planned) - row->actual;
+                if(!row->muted){
+                    row->diff = atof(row->planned) - row->actual;
+                    row->diff = round_to_hundredth(row->diff);
 
-                category->planned += atof(row->planned);
-                category->actual += row->actual;
-                category->diff += row->diff;
+                    category->planned += atof(row->planned);
+                    category->actual += row->actual;
+                    category->diff += row->diff;
+                }
             }
-            total_planned += category->planned;
-            total_actual += category->actual;
-            total_diff += category->diff;
+            category->planned = round_to_hundredth(category->planned);
+            category->actual  = round_to_hundredth(category->actual);
+            category->diff    = round_to_hundredth(category->diff);
+            if(!category->muted){
+                total_planned += category->planned;
+                total_actual  += category->actual;
+                total_diff    += category->diff;
+            }
         }
-        pm->total_planned = total_planned;
-        pm->total_actual = total_actual;
-        pm->total_diff = total_diff;
-        pm->total_saved = atof((char*)pm->budget.str) - pm->total_actual;
-        pm->total_goal = atof((char*)pm->budget.str) - pm->total_planned;
+        pm->total_planned = round_to_hundredth(total_planned);
+        pm->total_actual  = round_to_hundredth(total_actual);
+        pm->total_diff    = round_to_hundredth(total_diff);
+        pm->total_saved   = round_to_hundredth(atof((char*)pm->budget.str) - pm->total_actual);
+        pm->total_goal    = round_to_hundredth(atof((char*)pm->budget.str) - pm->total_planned);
 
         // todo: do this once
         for(s32 i=0; i < 12; ++i){

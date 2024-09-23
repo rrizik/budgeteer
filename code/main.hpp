@@ -94,6 +94,8 @@ typedef struct Row{
     char planned[128];
     f32 actual;
     f32 diff;
+
+    bool muted;
 } Row;
 
 typedef struct Category{
@@ -108,6 +110,7 @@ typedef struct Category{
 
     u32 row_count;
     bool draw_rows;
+    bool muted;
 } Category;
 
 typedef struct Transaction{
@@ -118,12 +121,16 @@ typedef struct Transaction{
     char amount[128];
     char description[128];
     char selection[128];
+
+    bool muted;
 } Transation;
 
 typedef struct MonthInfo{
     Month type;
     Transaction* transactions;
     u32 transactions_count;
+
+    bool muted;
 } MonthInfo;
 
 typedef struct PermanentMemory{
@@ -171,6 +178,12 @@ typedef struct PermanentMemory{
     f32 total_goal;
 
     bool draw_month_plan;
+    f32 hover_time;
+    f32 epsilon;
+
+
+    ImVec4 default_button_color;
+    ImVec4 default_button_hovered_color;
 
 } PermanentMemory, State;
 global PermanentMemory* pm;
@@ -182,6 +195,14 @@ typedef struct TransientMemory{
 
 } TransientMemory;
 global TransientMemory* tm;
+
+static f32
+round_to_hundredth(f32 value){
+    value = value * 100;
+    value = round_f32(value);
+    value = value / 100;
+    return(value);
+}
 
 static f32 input_padding = 4.0f;
 static f32 totals_number_start = 75.0f;
@@ -208,6 +229,9 @@ static f32 plus_column_start = diff_column_start + diff_column_width + 10.0f;
 static f32 plus_column_width = 15.0f;
 
 static f32 x_column_start = plus_column_start + plus_column_width + 5.0f;
+static f32 x_column_width = 15.0f;
+
+static f32 m_column_start = x_column_start + x_column_width + 5.0f;
 
 static void custom_separator(f32 thickness = 1.0f) {
     float columnWidth = ImGui::GetColumnWidth();
@@ -225,15 +249,19 @@ static void custom_separator(f32 thickness = 1.0f) {
     ImGui::Dummy(ImVec2(0.0f, thickness));
 }
 
-static f32 date_column_start = 50;
+static f32 hash_column_start = 20;
+static f32 hash_column_width = 20;
+static f32 date_column_start = hash_column_start + hash_column_width + 10;
 static f32 date_column_width = 80;
-static f32 amount_column_start = 150;
+static f32 amount_column_start = date_column_start + date_column_width + 20;
 static f32 amount_column_width = 75;
-static f32 description_column_start = 245;
+static f32 description_column_start = amount_column_start + amount_column_width + 20;
 static f32 description_column_width = 160;
-static f32 category_select_column_start = 425;
+static f32 category_select_column_start = description_column_start + description_column_width + 20;
 static f32 category_select_column_width = 100;
-static f32 plus_expense_column_start = 520;
+static f32 plus_expense_column_start = category_select_column_start + category_select_column_width;
+static f32 plus_expense_column_width = 23;
+static f32 x_expense_column_start = plus_expense_column_start + plus_expense_column_width;
 //static f32 plus_expense_column_width = 75;
 
 
@@ -395,6 +423,7 @@ typedef enum ParsingState{
     ParsingState_Budget,
     ParsingState_Category,
     ParsingState_Row,
+    ParsingState_Month,
     ParsingState_Transaction,
     ParsingState_Config,
 
@@ -604,13 +633,10 @@ deserialize_data(void){
             else if(str8_compare(line, str8_literal("#category\n"))){
                 state = ParsingState_Category;
             }
-            else if(str8_contains(line, str8_literal("#transactions"))){
-                state = ParsingState_Transaction;
-                for(s32 i=0; i < 12; ++i){
-                    if(str8_contains(line, str8_formatted(scratch.arena, "m%i", i))){
-                        month_idx = i;
-                    }
-                }
+            else if(str8_contains(line, str8_literal("#month"))){
+                state = ParsingState_Month;
+                pm->month = pm->months + month_idx;
+                ++month_idx;
             }
             else if(str8_compare(line, str8_literal("#config\n"))){
                 state = ParsingState_Config;
@@ -652,6 +678,10 @@ deserialize_data(void){
                     str8_node = str8_split(scratch.arena, word, '=');
                     category->draw_rows = atoi((char*)str8_node.prev->str.str);
                 }
+                else if(str8_contains(word, str8_literal("muted"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    category->muted = atoi((char*)str8_node.prev->str.str);
+                }
             }
             state = ParsingState_Row;
         }
@@ -684,13 +714,25 @@ deserialize_data(void){
                     str8_node = str8_split(scratch.arena, word, '=');
                     copy_word_to_char(row->planned, str8_node.prev->str);
                 }
+                else if(str8_contains(word, str8_literal("muted"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    row->muted = atoi((char*)str8_node.prev->str.str);
+                }
             }
         }
-        else if(state == ParsingState_Transaction){
-            pm->month = pm->months + month_idx;
-            if(month_idx == 9){
-                s32 a = 1;
+        else if(state == ParsingState_Month){
+            while(line.size){
+                String8 word = str8_eat_word(&line);
+
+                String8Node str8_node = {0};
+                if(str8_contains(word, str8_literal("muted"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    pm->month->muted = atoi((char*)str8_node.prev->str.str);
+                }
             }
+            state = ParsingState_Transaction;
+        }
+        else if(state == ParsingState_Transaction){
 
             Transaction* trans;
             if(line.size){
@@ -747,6 +789,10 @@ deserialize_data(void){
                         copy_word_to_char(trans->selection, str8_node.prev->str);
                     }
                 }
+                else if(str8_contains(word, str8_literal("muted"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    trans->muted = atoi((char*)str8_node.prev->str.str);
+                }
             }
         }
         else if(state == ParsingState_Config){
@@ -781,28 +827,28 @@ serialize_data(void){
 
         arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#category\n");
         arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
-                              "name=%s\x1B draw_rows=%d\n", c->name, c->draw_rows);
+                              "name=%s\x1B draw_rows=%i muted=%i\n", c->name, c->draw_rows, c->muted);
 
         Row* r = c->rows;
         for(s32 r_idx = 0; r_idx < c->row_count; ++r_idx){
             r = r->next;
             arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
-                                  "\tname=%s\x1B planned=%s\n", r->name, r->planned);
+                                  "\tname=%s\x1B planned=%s muted=%i\n", r->name, r->planned, r->muted);
         }
     }
 
-    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#transactions\n");
     for(s32 m_idx=0; m_idx < Month_Count; ++m_idx){
 
         pm->month = pm->months + m_idx;
-        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#transactions_m%i\n", m_idx);
+        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#month_m%i\n", m_idx);
+        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "muted=%i\n", pm->month->muted);
 
         Transaction* t = pm->month->transactions;
         for(s32 t_idx = 0; t_idx < pm->month->transactions_count; ++t_idx){
             t = t->next;
             arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
-                                  "date=%s amount=%s description=%s\x1B selection=%s\x1B\n",
-                                  t->date, t->amount, t->description, t->selection);
+                                  "date=%s amount=%s description=%s\x1B selection=%s\x1B muted=%i\n",
+                                  t->date, t->amount, t->description, t->selection, t->muted);
         }
     }
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#config\n");
