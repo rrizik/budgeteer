@@ -598,6 +598,20 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                 }
                 if(ImGui::Button("m##mute_category")){
                     category->muted = !category->muted;
+                    if(category->muted){
+                        Row* row = category->rows;
+                        for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
+                            row = row->next;
+                            row->muted = true;
+                        }
+                    }
+                    else{
+                        Row* row = category->rows;
+                        for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
+                            row = row->next;
+                            row->muted = false;
+                        }
+                    }
                 }
                 ImGui::PopID();
                 ImGui::PopStyleColor(2);
@@ -876,6 +890,20 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         }
         if(ImGui::Button("m##mute_month")){
             pm->month->muted = !pm->month->muted;
+            if(pm->month->muted){
+                Transaction* trans = pm->month->transactions;
+                for(s32 t_idx = 0; t_idx < pm->month->transactions_count; ++t_idx){
+                    trans = trans->next;
+                    trans->muted = true;
+                }
+            }
+            else{
+                Transaction* trans = pm->month->transactions;
+                for(s32 t_idx = 0; t_idx < pm->month->transactions_count; ++t_idx){
+                    trans = trans->next;
+                    trans->muted = false;
+                }
+            }
         }
         ImGui::PopStyleColor(2);
         ImGui::PopID();
@@ -1054,21 +1082,6 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             ImGui::PopStyleColor(2);
             ImGui::PopID();
 
-// HERE
-            //if(t_idx == 0){
-            //    ImGui::SameLine();
-            //    if(ImGui::Button("x all##x_all")){
-            //        Transaction* t = pm->month->transactions;
-            //        for(s32 t_idx=0; t_idx < pm->month->transactions_count; ++t_idx){
-            //            t = t->next;
-            //            dll_remove(t);
-            //            pool_free(pm->transaction_pool, t);
-            //            t = pm->month->transactions;
-            //        }
-            //        dll_clear(pm->month->transactions);
-            //        pm->month->transactions_count = 0;
-            //    }
-            //}
         }
 
         ImGui::EndChild();
@@ -1148,6 +1161,49 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         pm->total_diff    = round_to_hundredth(total_diff);
         pm->total_saved   = round_to_hundredth(atof((char*)pm->budget.str) - pm->total_actual);
         pm->total_goal    = round_to_hundredth(atof((char*)pm->budget.str) - pm->total_planned);
+
+        // note mute/unmute category based on rows muted.
+        category = pm->categories;
+        for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
+            category = category->next;
+
+            bool all_muted = true;
+            Row* row = category->rows;
+            for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
+                row = row->next;
+                if(!row->muted){
+                    all_muted = false;
+                }
+            }
+
+            if(all_muted){
+                category->muted = true;
+            }
+            else{
+                category->muted = false;
+            }
+        }
+
+        // note mute/unmute months based on transactions muted.
+        for(s32 m_idx=0; m_idx < array_count(pm->months); ++m_idx){
+            MonthInfo* month = pm->months + m_idx;
+
+            bool all_muted = true;
+            Transaction* trans = month->transactions;
+            for(s32 t_idx = 0; t_idx < month->transactions_count; ++t_idx){
+                trans = trans->next;
+                if(!trans->muted){
+                    all_muted = false;
+                }
+            }
+
+            if(all_muted){
+                month->muted = true;
+            }
+            else{
+                month->muted = false;
+            }
+        }
 
         // todo: do this once
         for(s32 i=0; i < 12; ++i){
