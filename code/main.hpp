@@ -125,11 +125,20 @@ typedef struct Transaction{
     bool muted;
 } Transation;
 
+typedef struct Totals{
+    f32 planned;
+    f32 actual;
+    f32 diff;
+    f32 saved;
+    f32 goal;
+} Totals;
+
 typedef struct MonthInfo{
     Month type;
     Transaction* transactions;
     u32 transactions_count;
 
+    Totals totals;
     bool muted;
 } MonthInfo;
 
@@ -171,11 +180,13 @@ typedef struct PermanentMemory{
     // budget totals
     String8 budget;
     //char budget[128];
-    f32 total_planned;
-    f32 total_actual;
-    f32 total_diff;
-    f32 total_saved;
-    f32 total_goal;
+
+    //Totals month_totals[12];
+    s32 quarter_idx;
+    s32 biannual_idx;
+    Totals quarter_totals[4];
+    Totals biannual_totals[2];
+    Totals annual_totals;
 
     bool draw_month_plan;
     f32 hover_time;
