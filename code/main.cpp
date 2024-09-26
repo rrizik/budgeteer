@@ -296,10 +296,17 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         pm->default_button_color = ImGui::GetStyleColorVec4(ImGuiCol_Button);
         pm->default_button_hovered_color = ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered);
         pm->epsilon = 0.001;
+        default_active_color = ImGui::GetStyleColorVec4(ImGuiCol_TabActive);
+        active_color = ImVec4(0.0f, default_active_color.y * 0.8f, default_active_color.z * 0.4f, default_active_color.w);
+
+        default_hover_color = ImGui::GetStyleColorVec4(ImGuiCol_TabHovered);
+        hover_color = ImVec4(0.0f, default_hover_color.y * 0.4f, default_hover_color.z * 0.8f, default_hover_color.w);
 
         load_config();
         deserialize_data();
-        pm->tab_flags[pm->month_tab_idx] = ImGuiTabItemFlags_SetSelected;
+        pm->month_tab_flags[pm->month_tab_idx] = ImGuiTabItemFlags_SetSelected;
+        pm->quarter_tab_flags[pm->quarter_tab_idx] = ImGuiTabItemFlags_SetSelected;
+        pm->biannual_tab_flags[pm->biannual_tab_idx] = ImGuiTabItemFlags_SetSelected;
 
         memory.initialized = true;
     }
@@ -365,15 +372,6 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         ImGui::Begin("Budgeteer");
         ImGui::Columns(2);
         ImGui::BeginChild("Column1", ImVec2(0, 0), true, ImGuiWindowFlags_AlwaysVerticalScrollbar);
-        //ImGuiChildFlags_None                    = 0,
-        //ImGuiChildFlags_Border                  = 1 << 0,   // Show an outer border and enable WindowPadding. (IMPORTANT: this is always == 1 == true for legacy reason)
-        //ImGuiChildFlags_AlwaysUseWindowPadding  = 1 << 1,   // Pad with style.WindowPadding even if no border are drawn (no padding by default for non-bordered child windows because it makes more sense)
-        //ImGuiChildFlags_ResizeX                 = 1 << 2,   // Allow resize from right border (layout direction). Enable .ini saving (unless ImGuiWindowFlags_NoSavedSettings passed to window flags)
-        //ImGuiChildFlags_ResizeY                 = 1 << 3,   // Allow resize from bottom border (layout direction). "
-        //ImGuiChildFlags_AutoResizeX             = 1 << 4,   // Enable auto-resizing width. Read "IMPORTANT: Size measurement" details above.
-        //ImGuiChildFlags_AutoResizeY             = 1 << 5,   // Enable auto-resizing height. Read "IMPORTANT: Size measurement" details above.
-        //ImGuiChildFlags_AlwaysAutoResize        = 1 << 6,   // Combined with AutoResizeX/AutoResizeY. Always measure size even when child is hidden, always return true, always disable clipping optimization! NOT RECOMMENDED.
-        //ImGuiChildFlags_FrameStyle              = 1 << 7,   // Style the child window like a framed item: use FrameBg, FrameRounding, FrameBorderSize, FramePadding instead of ChildBg, ChildRounding, ChildBorderSize, WindowPadding.
 
         ImGui::Text("Budget:");
         ImGui::SameLine();
@@ -392,16 +390,27 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         ImGui::BeginChild("Column2", ImVec2(0, 0), ImGuiChildFlags_Border |
                                                    ImGuiChildFlags_AutoResizeY);
         ImGui::Columns(4);
+        //ImGui::Dummy(ImVec2(0.0f, 20.0f));
+        if(ImGui::BeginTabBar("##monthmonth", ImGuiTabBarFlags_None)){
+
+            ImGui::PushStyleColor(ImGuiCol_TabActive, active_color);
+            ImGui::PushStyleColor(ImGuiCol_TabHovered, hover_color);
+
+            if(ImGui::BeginTabItem(m_names[pm->month_tab_idx], 0)){
+                ImGui::EndTabItem();
+            }
+            ImGui::PopStyleColor(2);
+            ImGui::EndTabBar();
+        }
         ImGui::SeparatorText("Monthly Totals");
-        ImGui::Dummy(ImVec2(0.0f, 20.0f));
         ImGui::Text("Planned: ");
         ImGui::SameLine();
         ImGui::SetCursorPosX(totals_number_start);
         ImGui::Text("%.2f", pm->month->totals.planned);
-        ImGui::Text("Actual: ");
+        ImGui::Text("Spent: ");
         ImGui::SameLine();
         ImGui::SetCursorPosX(totals_number_start);
-        ImGui::Text("%.2f", pm->month->totals.actual);
+        ImGui::Text("%.2f", pm->month->totals.spent);
         ImGui::Text("Diff: ");
         ImGui::SameLine();
         ImGui::SetCursorPosX(totals_number_start);
@@ -413,7 +422,6 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         else{
             ImGui::Text("%.2f", pm->month->totals.diff);
         }
-
         custom_separator();
         ImGui::Text("Goal: ");
         ImGui::SameLine();
@@ -426,7 +434,6 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         else{
             ImGui::Text("%.2f", pm->month->totals.goal);
         }
-
         ImGui::Text("Saved: ");
         ImGui::SameLine();
         ImGui::SetCursorPosX(totals_number_start);
@@ -440,34 +447,44 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         }
 
         ImGui::NextColumn();
+        if(ImGui::BeginTabBar("##quarter", ImGuiTabBarFlags_None)){
+
+            ImGui::PushStyleColor(ImGuiCol_TabActive, active_color);
+            ImGui::PushStyleColor(ImGuiCol_TabHovered, hover_color);
+
+            if(ImGui::BeginTabItem("Q1", 0, pm->quarter_tab_flags[0])){
+                pm->quarter_tab_idx = 0;
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("Q2", 0, pm->quarter_tab_flags[1])){
+                pm->quarter_tab_idx = 1;
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("Q3", 0, pm->quarter_tab_flags[1])){
+                pm->quarter_tab_idx = 2;
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("Q4", 0, pm->quarter_tab_flags[1])){
+                pm->quarter_tab_idx = 3;
+                ImGui::EndTabItem();
+            }
+            ImGui::PopStyleColor(2);
+            ImGui::EndTabBar();
+        }
         ImGui::SeparatorText("Quarterly Totals");
-        if(ImGui::Button("Q1")){
-            pm->quarter_idx = 0;
-        }
-        ImGui::SameLine();
-        if(ImGui::Button("Q2")){
-            pm->quarter_idx = 1;
-        }
-        ImGui::SameLine();
-        if(ImGui::Button("Q3")){
-            pm->quarter_idx = 2;
-        }
-        ImGui::SameLine();
-        if(ImGui::Button("Q4")){
-            pm->quarter_idx = 3;
-        }
-        Totals* totals = pm->quarter_totals + pm->quarter_idx;
+        Totals* totals = pm->quarter_totals + pm->quarter_tab_idx;
         ImGui::Text("Planned: ");
         ImGui::SameLine();
-        //ImGui::SetCursorPosX(totals_number_start);
+        f32 x_pos = ImGui::GetCursorPosX();
+        ImGui::SetCursorPosX(x_pos);
         ImGui::Text("%.2f", totals->planned);
-        ImGui::Text("Actual: ");
+        ImGui::Text("Spent: ");
         ImGui::SameLine();
-        //ImGui::SetCursorPosX(totals_number_start);
-        ImGui::Text("%.2f", totals->actual);
+        ImGui::SetCursorPosX(x_pos);
+        ImGui::Text("%.2f", totals->spent);
         ImGui::Text("Diff: ");
         ImGui::SameLine();
-        //ImGui::SetCursorPosX(totals_number_start);
+        ImGui::SetCursorPosX(x_pos);
         if(totals->diff < 0){
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
             ImGui::Text("%.2f", totals->diff);
@@ -479,7 +496,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         custom_separator();
         ImGui::Text("Goal: ");
         ImGui::SameLine();
-        //ImGui::SetCursorPosX(totals_number_start);
+        ImGui::SetCursorPosX(x_pos);
         if(totals->goal < 0){
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
             ImGui::Text("%.2f", totals->goal);
@@ -490,7 +507,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         }
         ImGui::Text("Saved: ");
         ImGui::SameLine();
-        //ImGui::SetCursorPosX(totals_number_start);
+        ImGui::SetCursorPosX(x_pos);
         if(totals->saved < totals->goal){
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
             ImGui::Text("%.2f", totals->saved);
@@ -501,26 +518,37 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         }
 
         ImGui::NextColumn();
+        if(ImGui::BeginTabBar("##biannual", ImGuiTabBarFlags_None)){
+
+            ImGui::PushStyleColor(ImGuiCol_TabActive, active_color);
+            ImGui::PushStyleColor(ImGuiCol_TabHovered, hover_color);
+
+            if(ImGui::BeginTabItem("Q1/Q2", 0, pm->biannual_tab_flags[0])){
+                pm->biannual_tab_idx = 0;
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("Q3/Q4", 0, pm->biannual_tab_flags[1])){
+                pm->biannual_tab_idx = 1;
+                ImGui::EndTabItem();
+            }
+            ImGui::PopStyleColor(2);
+            ImGui::EndTabBar();
+        }
         ImGui::SeparatorText("BiAnnual Totals");
-        if(ImGui::Button("Q1/Q2")){
-            pm->biannual_idx = 0;
-        }
-        ImGui::SameLine();
-        if(ImGui::Button("Q3/Q4")){
-            pm->biannual_idx = 1;
-        }
-        totals = pm->biannual_totals + pm->biannual_idx;
+        totals = pm->biannual_totals + pm->biannual_tab_idx;
         ImGui::Text("Planned: ");
         ImGui::SameLine();
-        //ImGui::SetCursorPosX(totals_number_start);
+        x_pos = ImGui::GetCursorPosX();
+        ImGui::SetCursorPosX(x_pos);
+
         ImGui::Text("%.2f", totals->planned);
-        ImGui::Text("Actual: ");
+        ImGui::Text("Spent: ");
         ImGui::SameLine();
-        //ImGui::SetCursorPosX(totals_number_start);
-        ImGui::Text("%.2f", totals->actual);
+        ImGui::SetCursorPosX(x_pos);
+        ImGui::Text("%.2f", totals->spent);
         ImGui::Text("Diff: ");
         ImGui::SameLine();
-        //ImGui::SetCursorPosX(totals_number_start);
+        ImGui::SetCursorPosX(x_pos);
         if(totals->diff < 0){
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
             ImGui::Text("%.2f", totals->diff);
@@ -532,7 +560,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         custom_separator();
         ImGui::Text("Goal: ");
         ImGui::SameLine();
-        //ImGui::SetCursorPosX(totals_number_start);
+        ImGui::SetCursorPosX(x_pos);
         if(totals->goal < 0){
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
             ImGui::Text("%.2f", totals->goal);
@@ -543,7 +571,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         }
         ImGui::Text("Saved: ");
         ImGui::SameLine();
-        //ImGui::SetCursorPosX(totals_number_start);
+        ImGui::SetCursorPosX(x_pos);
         if(totals->saved < totals->goal){
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
             ImGui::Text("%.2f", totals->saved);
@@ -554,20 +582,21 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         }
 
         ImGui::NextColumn();
-        ImGui::SeparatorText("Annual Totals");
         ImGui::Dummy(ImVec2(0.0f, 20.0f));
+        ImGui::SeparatorText("Annual Totals");
         totals = &pm->annual_totals;
         ImGui::Text("Planned: ");
         ImGui::SameLine();
-        //ImGui::SetCursorPosX(totals_number_start);
+        x_pos = ImGui::GetCursorPosX();
+        ImGui::SetCursorPosX(x_pos);
         ImGui::Text("%.2f", totals->planned);
-        ImGui::Text("Actual: ");
+        ImGui::Text("Spent: ");
         ImGui::SameLine();
-        //ImGui::SetCursorPosX(totals_number_start);
-        ImGui::Text("%.2f", totals->actual);
+        ImGui::SetCursorPosX(x_pos);
+        ImGui::Text("%.2f", totals->spent);
         ImGui::Text("Diff: ");
         ImGui::SameLine();
-        //ImGui::SetCursorPosX(totals_number_start);
+        ImGui::SetCursorPosX(x_pos);
         if(totals->diff < 0){
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
             ImGui::Text("%.2f", totals->diff);
@@ -579,7 +608,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         custom_separator();
         ImGui::Text("Goal: ");
         ImGui::SameLine();
-        //ImGui::SetCursorPosX(totals_number_start);
+        ImGui::SetCursorPosX(x_pos);
         if(totals->goal < 0){
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
             ImGui::Text("%.2f", totals->goal);
@@ -590,7 +619,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         }
         ImGui::Text("Saved: ");
         ImGui::SameLine();
-        //ImGui::SetCursorPosX(totals_number_start);
+        ImGui::SetCursorPosX(x_pos);
         if(totals->saved < totals->goal){
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
             ImGui::Text("%.2f", totals->saved);
@@ -626,8 +655,8 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             ImGui::SetCursorPosX(planned_column_start);
             ImGui::Text("Planned");
             ImGui::SameLine();
-            ImGui::SetCursorPosX(actual_column_start);
-            ImGui::Text("Actual");
+            ImGui::SetCursorPosX(spent_column_start);
+            ImGui::Text("Spent");
             ImGui::SameLine();
             ImGui::SetCursorPosX(diff_column_start);
             ImGui::Text("Diff");
@@ -723,13 +752,13 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                 ImGui::Text((char*)planned_str.data);
 
                 ImGui::SameLine();
-                ImGui::SetCursorPosX(actual_column_start + input_padding);
-                String8 actual_str = str8_formatted(scratch.arena, "%.2f", category->actual);
-                ImGui::Text((char*)actual_str.data);
+                ImGui::SetCursorPosX(spent_column_start + input_padding);
+                String8 spent_str = str8_formatted(scratch.arena, "%.2f", category->spent);
+                ImGui::Text((char*)spent_str.data);
 
                 ImGui::SameLine();
                 ImGui::SetCursorPosX(diff_column_start);
-                category->diff = category->planned - category->actual;
+                category->diff = category->planned - category->spent;
                 String8 category_diff = str8_formatted(scratch.arena, "%.2f", category->diff);
                 if(category->diff < 0){
                     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
@@ -848,21 +877,21 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                         ImGui::PopItemWidth();
 
                         ImGui::SameLine();
-                        ImGui::SetCursorPosX(actual_column_start + input_padding);
-                        ImGui::PushItemWidth(actual_column_width);
-                        String8 row_actual = str8_formatted(scratch.arena, "%.2f", row->actual);
-                        ImGui::Text((char*)row_actual.data);
+                        ImGui::SetCursorPosX(spent_column_start + input_padding);
+                        ImGui::PushItemWidth(spent_column_width);
+                        String8 row_spent = str8_formatted(scratch.arena, "%.2f", row->spent);
+                        ImGui::Text((char*)row_spent.data);
                         ImGui::PopItemWidth();
 
                         ImGui::SameLine();
                         ImGui::SetCursorPosX(diff_column_start);
                         f32 planned = atof(row->planned);
-                        if((planned - row->actual) < 0){
+                        if((planned - row->spent) < 0){
                             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
                         }
                         String8 row_diff = str8_formatted(scratch.arena, "%.2f", row->diff);
                         ImGui::Text((char*)row_diff.data);
-                        if((planned - row->actual) < 0){
+                        if((planned - row->spent) < 0){
                             ImGui::PopStyleColor();
                         }
 
@@ -939,60 +968,55 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         ImGui::SeparatorText("Transactions");
 
         if(ImGui::BeginTabBar("##Month", ImGuiTabBarFlags_None)){
-            ImVec4 active_color = ImGui::GetStyleColorVec4(ImGuiCol_TabActive);
-            active_color = ImVec4(0.0f, active_color.y * 0.8f, active_color.z * 0.4f, active_color.w);
-
-            ImVec4 hover_color = ImGui::GetStyleColorVec4(ImGuiCol_TabHovered);
-            hover_color = ImVec4(0.0f, hover_color.y * 0.4f, hover_color.z * 0.8f, hover_color.w);
 
             ImGui::PushStyleColor(ImGuiCol_TabActive, active_color);
             ImGui::PushStyleColor(ImGuiCol_TabHovered, hover_color);
 
-            if(ImGui::BeginTabItem("January", 0, pm->tab_flags[0])){
+            if(ImGui::BeginTabItem("January", 0, pm->month_tab_flags[0])){
                 pm->month_tab_idx = Month_Jan;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("February", 0, pm->tab_flags[1])){
+            if(ImGui::BeginTabItem("February", 0, pm->month_tab_flags[1])){
                 pm->month_tab_idx = Month_Feb;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("March", 0, pm->tab_flags[2])){
+            if(ImGui::BeginTabItem("March", 0, pm->month_tab_flags[2])){
                 pm->month_tab_idx = Month_Mar;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("April", 0, pm->tab_flags[3])){
+            if(ImGui::BeginTabItem("April", 0, pm->month_tab_flags[3])){
                 pm->month_tab_idx = Month_Apr;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("May", 0, pm->tab_flags[4])){
+            if(ImGui::BeginTabItem("May", 0, pm->month_tab_flags[4])){
                 pm->month_tab_idx = Month_May;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("June", 0, pm->tab_flags[5])){
+            if(ImGui::BeginTabItem("June", 0, pm->month_tab_flags[5])){
                 pm->month_tab_idx = Month_Jun;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("July", 0, pm->tab_flags[6])){
+            if(ImGui::BeginTabItem("July", 0, pm->month_tab_flags[6])){
                 pm->month_tab_idx = Month_Jul;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("August", 0, pm->tab_flags[7])){
+            if(ImGui::BeginTabItem("August", 0, pm->month_tab_flags[7])){
                 pm->month_tab_idx = Month_Aug;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("September", 0, pm->tab_flags[8])){
+            if(ImGui::BeginTabItem("September", 0, pm->month_tab_flags[8])){
                 pm->month_tab_idx = Month_Sep;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("October", 0, pm->tab_flags[9])){
+            if(ImGui::BeginTabItem("October", 0, pm->month_tab_flags[9])){
                 pm->month_tab_idx = Month_Oct;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("November", 0, pm->tab_flags[10])){
+            if(ImGui::BeginTabItem("November", 0, pm->month_tab_flags[10])){
                 pm->month_tab_idx = Month_Nov;
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("December", 0, pm->tab_flags[11])){
+            if(ImGui::BeginTabItem("December", 0, pm->month_tab_flags[11])){
                 pm->month_tab_idx = Month_Dec;
                 ImGui::EndTabItem();
             }
@@ -1271,7 +1295,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         for(s32 m_idx = 0; m_idx < array_count(pm->months); ++m_idx){
             MonthInfo* month = pm->months + m_idx;
 
-            // note: collect row->actual from transactions
+            // note: collect row->spent from transactions
             Category* category = pm->categories;
             for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
                 category = category->next;
@@ -1279,7 +1303,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                 Row* row = category->rows;
                 for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
                     row = row->next;
-                    row->actual = 0;
+                    row->spent = 0;
 
                     if(!month->muted){
                         trans = month->transactions;
@@ -1295,8 +1319,8 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                                 String8 full = str8_concatenate(tm->frame_arena, cat_part, name_part);
                                 if(str8_compare(full, trans_selection)){
                                     f32 amount = atof(trans->amount);
-                                    row->actual += amount;
-                                    row->actual = round_to_hundredth(row->actual);
+                                    row->spent += amount;
+                                    row->spent = round_to_hundredth(row->spent);
                                 }
                             }
                         }
@@ -1306,47 +1330,47 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
             // note: calcluate month budget/totals
             f32 month_total_planned = 0.0f;
-            f32 month_total_actual = 0.0f;
+            f32 month_total_spent = 0.0f;
             f32 month_total_diff = 0.0f;
             category = pm->categories;
             for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
                 category = category->next;
 
                 category->planned = 0;
-                category->actual = 0;
+                category->spent = 0;
                 category->diff = 0;
 
                 Row* row = category->rows;
                 for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
                     row = row->next;
                     if(!row->muted){
-                        row->diff = atof(row->planned) - row->actual;
+                        row->diff = atof(row->planned) - row->spent;
                         row->diff = round_to_hundredth(row->diff);
 
                         category->planned += atof(row->planned);
-                        category->actual += row->actual;
+                        category->spent += row->spent;
                         category->diff += row->diff;
                     }
                 }
                 category->planned = round_to_hundredth(category->planned);
-                category->actual  = round_to_hundredth(category->actual);
+                category->spent  = round_to_hundredth(category->spent);
                 category->diff    = round_to_hundredth(category->diff);
                 if(!category->muted){
                     month_total_planned += category->planned;
-                    month_total_actual  += category->actual;
+                    month_total_spent  += category->spent;
                     month_total_diff    += category->diff;
                 }
             }
             if(!month->muted){
                 month->totals.planned = round_to_hundredth(month_total_planned);
-                month->totals.actual  = round_to_hundredth(month_total_actual);
+                month->totals.spent  = round_to_hundredth(month_total_spent);
                 month->totals.diff    = round_to_hundredth(month_total_diff);
-                month->totals.saved   = round_to_hundredth(atof((char*)pm->budget.str) - month->totals.actual);
+                month->totals.saved   = round_to_hundredth(atof((char*)pm->budget.str) - month->totals.spent);
                 month->totals.goal    = round_to_hundredth(atof((char*)pm->budget.str) - month->totals.planned);
             }
             else{
                 month->totals.planned = 0;
-                month->totals.actual  = 0;
+                month->totals.spent  = 0;
                 month->totals.diff    = 0;
                 month->totals.saved   = 0;
                 month->totals.goal    = 0;
@@ -1360,7 +1384,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             Totals* totals = pm->quarter_totals + q_idx;
 
             totals->planned = 0;
-            totals->actual  = 0;
+            totals->spent  = 0;
             totals->diff    = 0;
             totals->saved   = 0;
             totals->goal    = 0;
@@ -1369,14 +1393,14 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
                 if(!month->muted){
                     totals->planned += month->totals.planned;
-                    totals->actual  += month->totals.actual;
+                    totals->spent  += month->totals.spent;
                     totals->diff    += month->totals.diff;
-                    totals->saved   += atof((char*)pm->budget.str) - month->totals.actual;
+                    totals->saved   += atof((char*)pm->budget.str) - month->totals.spent;
                     totals->goal    += atof((char*)pm->budget.str) - month->totals.planned;
                 }
             }
             totals->planned = round_to_hundredth(totals->planned);
-            totals->actual  = round_to_hundredth(totals->actual);
+            totals->spent  = round_to_hundredth(totals->spent);
             totals->diff    = round_to_hundredth(totals->diff);
             totals->saved   = round_to_hundredth(totals->saved);
             totals->goal    = round_to_hundredth(totals->goal);
@@ -1392,7 +1416,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             Totals* totals = pm->biannual_totals + q_idx;
 
             totals->planned = 0;
-            totals->actual  = 0;
+            totals->spent  = 0;
             totals->diff    = 0;
             totals->saved   = 0;
             totals->goal    = 0;
@@ -1401,14 +1425,14 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
                 if(!month->muted){
                     totals->planned += month->totals.planned;
-                    totals->actual  += month->totals.actual;
+                    totals->spent  += month->totals.spent;
                     totals->diff    += month->totals.diff;
-                    totals->saved   += atof((char*)pm->budget.str) - month->totals.actual;
+                    totals->saved   += atof((char*)pm->budget.str) - month->totals.spent;
                     totals->goal    += atof((char*)pm->budget.str) - month->totals.planned;
                 }
             }
             totals->planned = round_to_hundredth(totals->planned);
-            totals->actual  = round_to_hundredth(totals->actual);
+            totals->spent  = round_to_hundredth(totals->spent);
             totals->diff    = round_to_hundredth(totals->diff);
             totals->saved   = round_to_hundredth(totals->saved);
             totals->goal    = round_to_hundredth(totals->goal);
@@ -1419,7 +1443,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
         // note: calcluate annual budget/totals
         pm->annual_totals.planned = 0;
-        pm->annual_totals.actual  = 0;
+        pm->annual_totals.spent  = 0;
         pm->annual_totals.diff    = 0;
         pm->annual_totals.saved   = 0;
         pm->annual_totals.goal    = 0;
@@ -1428,20 +1452,20 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
             if(!month->muted){
                 pm->annual_totals.planned += month->totals.planned;
-                pm->annual_totals.actual  += month->totals.actual;
+                pm->annual_totals.spent  += month->totals.spent;
                 pm->annual_totals.diff    += month->totals.diff;
-                pm->annual_totals.saved   += atof((char*)pm->budget.str) - month->totals.actual;
+                pm->annual_totals.saved   += atof((char*)pm->budget.str) - month->totals.spent;
                 pm->annual_totals.goal    += atof((char*)pm->budget.str) - month->totals.planned;
             }
         }
         pm->annual_totals.planned = round_to_hundredth(pm->annual_totals.planned);
-        pm->annual_totals.actual  = round_to_hundredth(pm->annual_totals.actual);
+        pm->annual_totals.spent  = round_to_hundredth(pm->annual_totals.spent);
         pm->annual_totals.diff    = round_to_hundredth(pm->annual_totals.diff);
         pm->annual_totals.saved   = round_to_hundredth(pm->annual_totals.saved);
         pm->annual_totals.goal    = round_to_hundredth(pm->annual_totals.goal);
 
         {
-            // note: calculate selected months row->actual
+            // note: calculate selected months row->spent
             Category* category = pm->categories;
             for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
                 category = category->next;
@@ -1449,7 +1473,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                 Row* row = category->rows;
                 for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
                     row = row->next;
-                    row->actual = 0;
+                    row->spent = 0;
 
                     if(!pm->month->muted){
                         trans = pm->month->transactions;
@@ -1465,8 +1489,8 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
                                 String8 full = str8_concatenate(tm->frame_arena, cat_part, name_part);
                                 if(str8_compare(full, trans_selection)){
                                     f32 amount = atof(trans->amount);
-                                    row->actual += amount;
-                                    row->actual = round_to_hundredth(row->actual);
+                                    row->spent += amount;
+                                    row->spent = round_to_hundredth(row->spent);
                                 }
                             }
                         }
@@ -1476,41 +1500,41 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
             // note: calcluate selected month budget/totals
             f32 month_total_planned = 0.0f;
-            f32 month_total_actual = 0.0f;
+            f32 month_total_spent = 0.0f;
             f32 month_total_diff = 0.0f;
             category = pm->categories;
             for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
                 category = category->next;
 
                 category->planned = 0;
-                category->actual = 0;
+                category->spent = 0;
                 category->diff = 0;
 
                 Row* row = category->rows;
                 for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
                     row = row->next;
                     if(!row->muted){
-                        row->diff = atof(row->planned) - row->actual;
+                        row->diff = atof(row->planned) - row->spent;
                         row->diff = round_to_hundredth(row->diff);
 
                         category->planned += atof(row->planned);
-                        category->actual += row->actual;
+                        category->spent += row->spent;
                         category->diff += row->diff;
                     }
                 }
                 category->planned = round_to_hundredth(category->planned);
-                category->actual  = round_to_hundredth(category->actual);
+                category->spent  = round_to_hundredth(category->spent);
                 category->diff    = round_to_hundredth(category->diff);
                 if(!category->muted){
                     month_total_planned += category->planned;
-                    month_total_actual  += category->actual;
+                    month_total_spent  += category->spent;
                     month_total_diff    += category->diff;
                 }
             }
             pm->month->totals.planned = round_to_hundredth(month_total_planned);
-            pm->month->totals.actual  = round_to_hundredth(month_total_actual);
+            pm->month->totals.spent  = round_to_hundredth(month_total_spent);
             pm->month->totals.diff    = round_to_hundredth(month_total_diff);
-            pm->month->totals.saved   = round_to_hundredth(atof((char*)pm->budget.str) - pm->month->totals.actual);
+            pm->month->totals.saved   = round_to_hundredth(atof((char*)pm->budget.str) - pm->month->totals.spent);
             pm->month->totals.goal    = round_to_hundredth(atof((char*)pm->budget.str) - pm->month->totals.planned);
         }
 
@@ -1549,7 +1573,13 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
         // todo: do this once
         for(s32 i=0; i < 12; ++i){
-            pm->tab_flags[i] = 0;
+            pm->month_tab_flags[i] = 0;
+        }
+        for(s32 i=0; i < 4; ++i){
+            pm->quarter_tab_flags[i] = 0;
+        }
+        for(s32 i=0; i < 2; ++i){
+            pm->biannual_tab_flags[i] = 0;
         }
 
         //ImGui::ShowDemoWindow(); // Show demo window! :)

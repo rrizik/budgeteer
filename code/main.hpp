@@ -92,7 +92,7 @@ typedef struct Row{
 
     char name[128];
     char planned[128];
-    f32 actual;
+    f32 spent;
     f32 diff;
 
     bool muted;
@@ -105,7 +105,7 @@ typedef struct Category{
 
     char name[128];
     f32 planned;
-    f32 actual;
+    f32 spent;
     f32 diff;
 
     u32 row_count;
@@ -127,7 +127,7 @@ typedef struct Transaction{
 
 typedef struct Totals{
     f32 planned;
-    f32 actual;
+    f32 spent;
     f32 diff;
     f32 saved;
     f32 goal;
@@ -173,7 +173,9 @@ typedef struct PermanentMemory{
     u32 desc_names_count;
 
     // for setting tab flags
-    u32 tab_flags[12];
+    u32 month_tab_flags[12];
+    u32 quarter_tab_flags[4];
+    u32 biannual_tab_flags[2];
 
     String8 default_path;
 
@@ -182,8 +184,8 @@ typedef struct PermanentMemory{
     //char budget[128];
 
     //Totals month_totals[12];
-    s32 quarter_idx;
-    s32 biannual_idx;
+    s32 quarter_tab_idx;
+    s32 biannual_tab_idx;
     Totals quarter_totals[4];
     Totals biannual_totals[2];
     Totals annual_totals;
@@ -215,6 +217,13 @@ round_to_hundredth(f32 value){
     return(value);
 }
 
+static const char* m_names[12] = {"January", "Febuary", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+static ImVec4 default_active_color;
+static ImVec4 active_color;
+
+static ImVec4 default_hover_color;
+static ImVec4 hover_color;
+
 static f32 input_padding = 4.0f;
 static f32 totals_number_start = 75.0f;
 
@@ -230,10 +239,10 @@ static f32 category_column_width = 100.0f;
 static f32 planned_column_start = category_column_start + category_column_width + 10.0f;
 static f32 planned_column_width = 75.0f;
 
-static f32 actual_column_start = planned_column_start + planned_column_width + 10.0f;
-static f32 actual_column_width = 50.0f;
+static f32 spent_column_start = planned_column_start + planned_column_width + 10.0f;
+static f32 spent_column_width = 50.0f;
 
-static f32 diff_column_start = actual_column_start + actual_column_width + 10.0f;
+static f32 diff_column_start = spent_column_start + spent_column_width + 10.0f;
 static f32 diff_column_width = 75.0f;
 
 static f32 plus_column_start = diff_column_start + diff_column_width + 10.0f;
@@ -815,6 +824,14 @@ deserialize_data(void){
                     str8_node = str8_split(scratch.arena, word, '=');
                     pm->month_tab_idx = atoi((char*)str8_node.prev->str.str);
                 }
+                else if(str8_contains(word, str8_literal("quarter_tab_idx"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    pm->quarter_tab_idx = atoi((char*)str8_node.prev->str.str);
+                }
+                else if(str8_contains(word, str8_literal("biannual_tab_idx"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    pm->biannual_tab_idx = atoi((char*)str8_node.prev->str.str);
+                }
             }
         }
     }
@@ -863,7 +880,9 @@ serialize_data(void){
         }
     }
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#config\n");
-    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "month_tab_idx=%i\n", pm->month_tab_idx);
+    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
+                          "month_tab_idx=%i quarter_tab_idx=%i biannual_tab_idx=%i\n",
+                          pm->month_tab_idx, pm->quarter_tab_idx, pm->biannual_tab_idx);
 
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "\0");
 
