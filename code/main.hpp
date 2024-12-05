@@ -86,24 +86,27 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 static LRESULT win_message_handler_callback(HWND hwnd, u32 message, u64 w_param, s64 l_param);
 
 
+#define ROW_NAME_SIZE 128
+#define ROW_PLANNED_SIZE 128
 typedef struct Row{
     Row* next;
     Row* prev;
 
-    char name[128];
-    char planned[128];
+    char name[ROW_NAME_SIZE];
+    char planned[ROW_PLANNED_SIZE];
     f32 spent;
     f32 diff;
 
     bool muted;
 } Row;
 
+#define CAT_NAME_SIZE 128
 typedef struct Category{
     Category* next;
     Category* prev;
     Row* rows;
 
-    char name[128];
+    char name[CAT_NAME_SIZE];
     f32 planned;
     f32 spent;
     f32 diff;
@@ -113,14 +116,18 @@ typedef struct Category{
     bool muted;
 } Category;
 
+#define TRANS_DATE_SIZE 128
+#define TRANS_AMOUNT_SIZE 128
+#define TRANS_DESC_SIZE 1024
+#define TRANS_SELECTION_SIZE 128
 typedef struct Transaction{
     Transaction* next;
     Transaction* prev;
 
-    char date[128];
-    char amount[128];
-    char description[128];
-    char selection[128];
+    char date[TRANS_DATE_SIZE];
+    char amount[TRANS_AMOUNT_SIZE];
+    char description[TRANS_DESC_SIZE];
+    char selection[TRANS_SELECTION_SIZE];
 
     bool muted;
 } Transation;
@@ -142,6 +149,8 @@ typedef struct MonthInfo{
     bool muted;
 } MonthInfo;
 
+#define CONFIG_NAMES_SIZE 32
+#define SELECTION_LIST_SIZE 128
 typedef struct PermanentMemory{
     // memory
     Arena arena;
@@ -151,25 +160,33 @@ typedef struct PermanentMemory{
     Arena* data_arena;
 
     // category/rows/months/transactions
+    Category* annual_categories;
+    Category* biannual_categories;
+    Category* quarter_categories;
     Category* categories;
-    MonthInfo months[12];
+
+    MonthInfo months[Month_Count];
     MonthInfo* month;
     u32 month_tab_idx; // selected month tab idx
 
     u32 total_rows_count;
     u32 categories_count;
     u32 transactions_count;
+    u32 quarter_categories_count;
+    u32 biannual_categories_count;
+    u32 annual_categories_count;
 
     // for creating the transaction selection list
+    // todo(rr): just turn this into a list
 	String8* selection_list;
     u32 selection_count;
 
     // for config loading
-    String8 date_names[32];
+    String8 date_names[CONFIG_NAMES_SIZE];
     u32 date_names_count;
-    String8 amount_names[32];
+    String8 amount_names[CONFIG_NAMES_SIZE];
     u32 amount_names_count;
-    String8 desc_names[32];
+    String8 desc_names[CONFIG_NAMES_SIZE];
     u32 desc_names_count;
 
     // for setting tab flags
@@ -190,7 +207,12 @@ typedef struct PermanentMemory{
     Totals biannual_totals[2];
     Totals annual_totals;
 
+    // todo: serialize these
     bool draw_month_plan;
+    bool draw_quarter_plan;
+    bool draw_biannual_plan;
+    bool draw_annual_plan;
+
     f32 hover_time;
     f32 epsilon;
 
@@ -217,6 +239,9 @@ round_to_hundredth(f32 value){
     return(value);
 }
 
+static ImVec4  combo_popup_background_color;
+static ImColor combo_popup_alternating_colors[2];
+static String8 last_combo_name;
 static const char* m_names[12] = {"January", "Febuary", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
 static ImVec4 default_active_color;
 static ImVec4 active_color;
@@ -227,7 +252,8 @@ static ImVec4 hover_color;
 static f32 input_padding = 4.0f;
 static f32 totals_number_start = 75.0f;
 
-static f32 collapse_column_start = 8.0f;
+//static f32 collapse_column_start = 8.0f;
+static f32 collapse_column_start = 30.0f;
 static f32 collapse_column_width = 25.0f;
 
 static f32 row_count_column_start = collapse_column_start + collapse_column_width;
@@ -242,7 +268,7 @@ static f32 planned_column_width = 75.0f;
 static f32 spent_column_start = planned_column_start + planned_column_width + 10.0f;
 static f32 spent_column_width = 50.0f;
 
-static f32 diff_column_start = spent_column_start + spent_column_width + 10.0f;
+static f32 diff_column_start = spent_column_start + spent_column_width + 20.0f;
 static f32 diff_column_width = 75.0f;
 
 static f32 plus_column_start = diff_column_start + diff_column_width + 10.0f;
@@ -315,10 +341,12 @@ char_only_spaces(char* src){
 // todo: remove this once you change to str8 for everything
 static void
 copy_word_to_char(char* c, String8 string){
-    for(s32 i=0; i < string.size; ++i){
+    s32 smallest_size = TRANS_DESC_SIZE <= string.size ? TRANS_DESC_SIZE : string.size;
+    for(s32 i=0; i < smallest_size; ++i){
         c[i] = string.str[i];
     }
     c[string.size] = '\0';
+    // todo(rr): do I need this?
     if(c[string.size - 1] == '\n' || c[string.size - 1] == '\x1B'){
         c[string.size - 1] = '\0';
     }
@@ -411,33 +439,6 @@ str8_eat_word_csv(String8* string){
     return(result);
 }
 
-
-//static String8
-//str8_next_csv_word(String8* string){
-//    String8 result = {0};
-//    str8_eat_spaces(string);
-//
-//    u8* ptr = string->str;
-//    u32 count = 0;
-//    if(string->size){
-//        while(*ptr != ',' && *ptr != '\0'){
-//            count++;
-//            ptr++;
-//            if(count >= string->size){
-//                result = {string->str, count};
-//                str8_advance(string, count);
-//                return(result);
-//            }
-//        }
-//
-//        result = {string->str, count};
-//        // note: +1 to account for comma in csv format
-//        str8_advance(string, count + 1);
-//    }
-//
-//    return(result);
-//}
-
 typedef enum ParsingState{
     ParsingState_None,
     ParsingState_Budget,
@@ -485,7 +486,7 @@ load_csv(String8 full_path){
             u32 word_count = 0;
             while(line.size){
                 word = str8_eat_word_csv(&line);
-                for(u32 i=0; i < 32; ++i){
+                for(u32 i=0; i < CONFIG_NAMES_SIZE; ++i){
                     if(str8_compare(pm->date_names[i], word)){
                         date_idx = word_count;
                     }
@@ -832,6 +833,22 @@ deserialize_data(void){
                     str8_node = str8_split(scratch.arena, word, '=');
                     pm->biannual_tab_idx = atoi((char*)str8_node.prev->str.str);
                 }
+                else if(str8_contains(word, str8_literal("draw_month_plan"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    pm->draw_month_plan = atoi((char*)str8_node.prev->str.str);
+                }
+                else if(str8_contains(word, str8_literal("draw_quarter_plan"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    pm->draw_quarter_plan = atoi((char*)str8_node.prev->str.str);
+                }
+                else if(str8_contains(word, str8_literal("draw_biannual_plan"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    pm->draw_biannual_plan = atoi((char*)str8_node.prev->str.str);
+                }
+                else if(str8_contains(word, str8_literal("draw_annual_plan"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    pm->draw_annual_plan = atoi((char*)str8_node.prev->str.str);
+                }
             }
         }
     }
@@ -883,6 +900,9 @@ serialize_data(void){
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
                           "month_tab_idx=%i quarter_tab_idx=%i biannual_tab_idx=%i\n",
                           pm->month_tab_idx, pm->quarter_tab_idx, pm->biannual_tab_idx);
+    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
+                          "draw_month_plan=%i draw_quarter_plan=%i draw_biannual_plan=%i draw_annual_plan=%i\n",
+                          pm->draw_month_plan, pm->draw_quarter_plan, pm->draw_biannual_plan, pm->draw_annual_plan);
 
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "\0");
 
