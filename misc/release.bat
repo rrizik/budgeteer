@@ -1,8 +1,24 @@
 @echo off
+setlocal EnableDelayedExpansion
 
+echo - RELEASE Build
+set cl_optimization=-O2 -DRELEASE=1
+set cl_includes=-I ..\..\base\code
+set cl_flags=/Zi /nologo -std:c++latest /Wall /WX 
+set cl_imgui_flags=/Zi /nologo -std:c++latest
+set cl_ignore_warnings=-wd4201 -wd4189 -wd4101 -wd4505 -wd4820 -wd5045 -wd4996 -wd4100 -wd4668 -wd4711 -wd4062 -wd4388 -wd4018 -wd4459 -wd4626  
+
+IF NOT EXIST ..\build mkdir ..\build
+pushd ..\build
+cl /EHsc %cl_optimization% %cl_imgui_flags% %cl_includes% ..\code\main.cpp ..\code\imgui\imgui*.cpp ..\code\tinyfiledialogs\tinyfiledialogs.cpp /Febudgeteer.exe
+popd
+echo - Done 
+
+echo - Creating release zip
+:: create release dir if it doesnt exist
 IF NOT EXIST ..\release mkdir ..\release
-pushd ..\release
 
+pushd ..\release
 :: copy over save dir and create empty budget file
 rmdir /S /Q .\saves
 mkdir .\saves
@@ -18,6 +34,7 @@ if exist budgeteer.zip del budgeteer.zip
 
 :: Zip the contents of the release folder using 7-Zip
 "C:\Program Files\7-Zip\7z.exe" a budgeteer.zip *
-
 popd
+
+echo - Done
 

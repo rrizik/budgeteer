@@ -1,19 +1,13 @@
-echo off
-
-set clangcl_flags=-I ..\..\base\code -Od -Z7 -Wconversion -Werror -Wall -Wextra 
-rem review these at some poins
-set clangcl_ignore_warnings=-Wno-language-extension-token -Wno-writable-strings -Wno-switch -Wno-c99-designator -Wno-microsoft-goto -Wno-deprecated-declarations -Wno-tautological-constant-out-of-range-compare -Wno-missing-declarations -Wno-double-promotion -Wno-double-promotion -Wno-c++17-extensions -Wno-old-style-cast -Wno-gnu-anonymous-struct -Wno-missing-braces -Wno-float-equal -Wno-c++98-compat-pedantic -Wno-nested-anon-types -Wno-c11-extensions -Wno-zero-as-null-pointer-constant -Wno-unused-variable -Wno-comma -Wno-shadow -Wno-missing-field-initializers -Wno-cast-align -Wno-cast-qual -Wno-covered-switch-default -Wno-unused-macros -Wno-global-constructors -Wno-unused-parameter -Wno-format-nonliteral -Wno-unused-function -Wno-header-hygiene -Wno-c99-extensions -Wno-nonportable-system-include-path -Wno-sign-compare
-rem I don't know if I want this
-set compiler_defines=/D DEBUG=%DEBUG% /D RELEASE=%RELEASE%
-set linker_flags=-incremental:no -opt:ref
+@echo off
+setlocal EnableDelayedExpansion
 
 set DEBUG=1
-if %DEBUG% == 1 (
+if !DEBUG! == 1 (
     echo - DEBUG 
-    set optimization=-Od -DDEBUG=1
+    set cl_optimization=-Od -DDEBUG=1
 ) ELSE (
     echo - RELEASE 
-    set optimization=-O2 -DRELEASE=1
+    set cl_optimization=-O2 -DRELEASE=1
 )
 
 set cl_includes=-I ..\..\base\code
@@ -40,9 +34,6 @@ rem C4626: remove and understand (something to do with defer)
 
 IF NOT EXIST ..\build mkdir ..\build
 pushd ..\build
-rem IF NOT EXIST data move ..\data . 
-cl /EHsc %cl_imgui_flags% %cl_includes% ..\code\main.cpp ..\code\imgui\imgui*.cpp ..\code\tinyfiledialogs\tinyfiledialogs.cpp /Febudgeteer.exe
-rem cl /I ..\..\base\code /Zi /nologo -std:c++latest ..\code\main.cpp ..\code\imgui\imgui*.cpp
-
+cl /EHsc %cl_optimization% %cl_imgui_flags% %cl_includes% ..\code\main.cpp ..\code\imgui\imgui*.cpp ..\code\tinyfiledialogs\tinyfiledialogs.cpp /Febudgeteer.exe
 popd
 
