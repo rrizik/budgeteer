@@ -19,10 +19,14 @@
 
 #include "input.hpp"
 #include "clock.hpp"
+#include "window.hpp"
+#include "bitmap.hpp"
 #include "d3d11_init.hpp"
+#include <time.h>
 
 #include "input.cpp"
 #include "clock.cpp"
+#include "bitmap.cpp"
 #include "d3d11_init.cpp"
 
 #include "imgui/imgui.h"
@@ -52,29 +56,10 @@ typedef struct Memory{
 global Memory memory;
 static void memory_init();
 
-#define SCREEN_WIDTH 1920
-#define SCREEN_HEIGHT 1080
+#define DEFAULT_SCREEN_WIDTH 1600
+#define DEFAULT_SCREEN_HEIGHT 720
 
-typedef enum WindowType{
-    WindowType_Fullscreen,
-    WindowType_Windowed,
-} WindowType;
-
-typedef struct Window{
-    union{
-        struct{
-            f32 width;
-            f32 height;
-        };
-        v2 dim;
-    };
-    f32 aspect_ratio;
-
-    HWND handle;
-    WindowType type;
-} Window;
-global Window window;
-static Window win32_window_create(const wchar* window_name, s32 width, s32 height);
+static Window win32_window_create(const wchar* window_name, s32 x, s32 y, s32 width, s32 height, bool maximized=false);
 
 global bool should_quit;
 global Arena* global_arena = os_make_arena(MB(100));
@@ -107,7 +92,7 @@ typedef struct Category{
     Row* rows;
 
     char name[CAT_NAME_SIZE];
-    f32 planned;
+    f32 planned; // todo(rr): this is considered a kind of cache, don't do this unless you actually need to
     f32 spent;
     f32 diff;
 
@@ -132,6 +117,7 @@ typedef struct Transaction{
     bool muted;
 } Transation;
 
+// todo(rr): don't need this, don't store this info. Just calculate it once a free
 typedef struct Totals{
     f32 planned;
     f32 spent;
@@ -142,6 +128,7 @@ typedef struct Totals{
 
 typedef struct MonthInfo{
     Month type;
+
     Transaction* transactions;
     u32 transactions_count;
 
@@ -149,7 +136,23 @@ typedef struct MonthInfo{
     bool muted;
 } MonthInfo;
 
-#define CONFIG_NAMES_SIZE 32
+typedef struct Year{
+    s32 number;
+    s32 total_transactions;
+    //MonthInfo* month; // todo(rr): decide if this is something you want. Its only for convenience
+    MonthInfo months[Month_Count];
+} Year;
+#define MAX_YEAR_COUNT 128
+
+#define CSV_COLUMN_NAME_SIZE 128
+typedef struct CSVColumnNode{
+    CSVColumnNode* next;
+    CSVColumnNode* prev;
+
+    char name[CSV_COLUMN_NAME_SIZE];
+} CSVColumnNode;
+
+#define CONFIG_NAMES_COUNT 32
 #define SELECTION_LIST_SIZE 128
 typedef struct PermanentMemory{
     // memory
@@ -157,18 +160,23 @@ typedef struct PermanentMemory{
     PoolArena* category_pool;
     PoolArena* row_pool;
     PoolArena* transaction_pool;
+    PoolArena* csv_pool;
     Arena* data_arena;
 
     // category/rows/months/transactions
     Category* annual_categories;
     Category* biannual_categories;
     Category* quarter_categories;
-    Category* categories;
+    Category* month_categories;
 
-    MonthInfo months[Month_Count];
-    MonthInfo* month;
-    u32 month_tab_idx; // selected month tab idx
+    // Years are setup where 0 == current year, -1 == current year - 1, 1 == current year + 1
+    Year years[MAX_YEAR_COUNT];
+    Year* year;
+    s32 year_idx;
+    s32 transaction_year;
+    s32 current_year;
 
+    // todo(rr): review total_ for all
     u32 total_rows_count;
     u32 categories_count;
     u32 transactions_count;
@@ -181,18 +189,23 @@ typedef struct PermanentMemory{
 	String8* selection_list;
     u32 selection_count;
 
-    // for config loading
-    String8 date_names[CONFIG_NAMES_SIZE];
+    // CSV column names
+    CSVColumnNode* date_names;
+    CSVColumnNode* amount_names;
+    CSVColumnNode* description_names;
+    CSVColumnNode* date_formats;
     u32 date_names_count;
-    String8 amount_names[CONFIG_NAMES_SIZE];
     u32 amount_names_count;
-    String8 desc_names[CONFIG_NAMES_SIZE];
-    u32 desc_names_count;
+    u32 description_names_count;
+    u32 date_formats_count;
 
     // for setting tab flags
     u32 month_tab_flags[12];
     u32 quarter_tab_flags[4];
     u32 biannual_tab_flags[2];
+    u32 month_tab_idx;
+    s32 quarter_tab_idx;
+    s32 biannual_tab_idx;
 
     String8 default_path;
 
@@ -200,9 +213,6 @@ typedef struct PermanentMemory{
     String8 budget;
     //char budget[128];
 
-    //Totals month_totals[12];
-    s32 quarter_tab_idx;
-    s32 biannual_tab_idx;
     Totals quarter_totals[4];
     Totals biannual_totals[2];
     Totals annual_totals;
@@ -212,10 +222,6 @@ typedef struct PermanentMemory{
     bool draw_quarter_plan;
     bool draw_biannual_plan;
     bool draw_annual_plan;
-
-    f32 hover_time;
-    f32 epsilon;
-
 
     ImVec4 default_button_color;
     ImVec4 default_button_hovered_color;
@@ -242,7 +248,7 @@ round_to_hundredth(f32 value){
 static ImVec4  combo_popup_background_color;
 static ImColor combo_popup_alternating_colors[2];
 static String8 last_combo_name;
-static const char* m_names[12] = {"January", "Febuary", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+static const char* month_names[12] = {"January", "Febuary", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
 static ImVec4 default_active_color;
 static ImVec4 active_color;
 
@@ -279,6 +285,12 @@ static f32 x_column_width = 15.0f;
 
 static f32 m_column_start = x_column_start + x_column_width + 5.0f;
 
+static f32 csv_date_plus_button_start = 160.0f;
+static f32 csv_date_plus_button_width = 15.0f;
+static f32 csv_date_x_button_start = csv_date_plus_button_start + csv_date_plus_button_width + 5.0f;
+
+static f32 csv_amount_plus_button_start = 100.0f;
+
 static void custom_separator(f32 thickness = 1.0f) {
     float columnWidth = ImGui::GetColumnWidth();
     float padding = ImGui::GetStyle().WindowPadding.x;
@@ -295,7 +307,7 @@ static void custom_separator(f32 thickness = 1.0f) {
     ImGui::Dummy(ImVec2(0.0f, thickness));
 }
 
-static f32 hash_column_start = 20;
+static f32 hash_column_start = 25;
 static f32 hash_column_width = 20;
 static f32 date_column_start = hash_column_start + hash_column_width + 10;
 static f32 date_column_width = 80;
@@ -303,12 +315,11 @@ static f32 amount_column_start = date_column_start + date_column_width + 20;
 static f32 amount_column_width = 75;
 static f32 description_column_start = amount_column_start + amount_column_width + 20;
 static f32 description_column_width = 160;
-static f32 category_select_column_start = description_column_start + description_column_width + 20;
+static f32 category_select_column_start = description_column_start + description_column_width + 10;
 static f32 category_select_column_width = 100;
-static f32 plus_expense_column_start = category_select_column_start + category_select_column_width;
+static f32 plus_expense_column_start = category_select_column_start + category_select_column_width + 10;
 static f32 plus_expense_column_width = 23;
 static f32 x_expense_column_start = plus_expense_column_start + plus_expense_column_width;
-//static f32 plus_expense_column_width = 75;
 
 
 static bool
@@ -406,13 +417,10 @@ str8_strip_newline(String8* string){
 static bool
 str8_strip_quotes(String8* string){
     bool result = false;
-    if(string->data[0] == '"'){
+
+    if(string->data[0] == '"' && string->data[string->count - 1] == '"'){
         string->data = string->data + 1;
-        --string->count;
-        result = true;
-    }
-    if(string->data[string->count - 1] == '"'){
-        --string->count;
+        string->count -= 2;
         result = true;
     }
 
@@ -439,26 +447,56 @@ str8_eat_word_csv(String8* string){
     return(result);
 }
 
-typedef enum ParsingState{
-    ParsingState_None,
-    ParsingState_Budget,
-    ParsingState_Category,
-    ParsingState_Row,
-    ParsingState_Month,
-    ParsingState_Transaction,
-    ParsingState_Config,
+typedef enum BudgetParsingState{
+    BudgetParsingState_None,
+    BudgetParsingState_Budget,
+    BudgetParsingState_Category,
+    BudgetParsingState_Row,
 
-    ParsingState_Date,
-    ParsingState_Amount,
-    ParsingState_Description,
+    BudgetParsingState_Count,
+} BudgetParsingState;
+BudgetParsingState bps = BudgetParsingState_None;
 
-    ParsingState_Count,
-} ParsingState;
+typedef enum TransactionParsingState{
+    TransactionParsingState_None,
 
-ParsingState state = ParsingState_None;
+    TransactionParsingState_Month,
+    TransactionParsingState_Transaction,
+
+    TransactionParsingState_Count,
+} TransactionParingState;
+TransactionParsingState tps = TransactionParsingState_None;
+
+typedef enum ConfigParsingState{
+    ConfigParsingState_None,
+    ConfigParsingState_Date,
+    ConfigParsingState_Amount,
+    ConfigParsingState_Description,
+    ConfigParsingState_DateFormat,
+
+    ConfigParsingState_TabsSelected,
+    ConfigParsingState_Collapsables,
+    ConfigParsingState_Window,
+    ConfigParsingState_Restored,
+    ConfigParsingState_Tooltips,
+
+    ConfigParsingState_Year,
+
+    ConfigParsingState_Count,
+} ConfigParsingState;
+ConfigParsingState cps = ConfigParsingState_None;
+
+global s32 window_width;
+global s32 window_height;
+global s32 window_maximized;
+global s32 window_x;
+global s32 window_y;
+global Rect window_restored_rect;
+global bool show_tooltips = true;
+global bool year_config_deserialized = false;
 
 static void
-load_csv(String8 full_path){
+deserialize_csv(String8 full_path){
 
     File file = os_file_open(full_path, GENERIC_READ, OPEN_EXISTING);
     if(!file.size){
@@ -472,12 +510,12 @@ load_csv(String8 full_path){
     String8 data = os_file_read(scratch.arena, file);
     String8* ptr = &data;
 
-    state = ParsingState_None;
     s32 date_idx = -1;
     s32 amount_idx = -1;
     s32 desc_idx = -1;
     bool header = true;
     String8 line = {0};
+    MonthInfo* month = pm->year->months + pm->month_tab_idx;
     while(ptr->size){
         line = str8_eat_line(ptr);
 
@@ -486,17 +524,30 @@ load_csv(String8 full_path){
             u32 word_count = 0;
             while(line.size){
                 word = str8_eat_word_csv(&line);
-                for(u32 i=0; i < CONFIG_NAMES_SIZE; ++i){
-                    if(str8_compare(pm->date_names[i], word)){
+                str8_strip_quotes(&word);
+
+                for(CSVColumnNode* node = pm->date_names->next; node != pm->date_names; node = node->next){
+                    u64 len = char_length(node->name);
+                    String8 str8_name = str8(node->name, len);
+                    if(str8_compare(str8_name, word)){
                         date_idx = word_count;
                     }
-                    else if(str8_compare(pm->amount_names[i], word)){
+                }
+                for(CSVColumnNode* node = pm->amount_names->next; node != pm->amount_names; node = node->next){
+                    u64 len = char_length(node->name);
+                    String8 str8_name = str8(node->name, len);
+                    if(str8_compare(str8_name, word)){
                         amount_idx = word_count;
                     }
-                    else if(str8_compare(pm->desc_names[i], word)){
+                }
+                for(CSVColumnNode* node = pm->description_names->next; node != pm->description_names; node = node->next){
+                    u64 len = char_length(node->name);
+                    String8 str8_name = str8(node->name, len);
+                    if(str8_compare(str8_name, word)){
                         desc_idx = word_count;
                     }
                 }
+
                 ++word_count;
             }
             header = false;
@@ -504,14 +555,16 @@ load_csv(String8 full_path){
 
         else if(line.size){
             Transaction* trans = (Transaction*)pool_next(pm->transaction_pool);
-            dll_push_back(pm->month->transactions, trans);
-            ++pm->month->transactions_count;
+            dll_push_back(month->transactions, trans);
+            ++month->transactions_count;
 
             u32 count = 0;
             String8 word;
             while(line.size){
                 word = str8_eat_word_csv(&line);
                 str8_strip_newline(&word);
+                str8_strip_quotes(&word);
+
                 if(count == date_idx){
                     if(word.size == 0){
                         copy_word_to_char(trans->date, str8_literal("\0"));
@@ -536,9 +589,9 @@ load_csv(String8 full_path){
                         copy_word_to_char(trans->description, str8_literal("\0"));
                     }
                     else{
-                        String8* view = &word;
-                        str8_strip_quotes(view);
-                        copy_word_to_char(trans->description, *view);
+                        String8 view = word;
+                        str8_strip_quotes(&view);
+                        copy_word_to_char(trans->description, view);
                     }
                 }
 
@@ -547,13 +600,12 @@ load_csv(String8 full_path){
         }
     }
 
-    state = ParsingState_None;
     os_file_close(file);
     end_scratch(scratch);
 }
 
 static void
-load_config(void){
+deserialize_config(void){
     ScratchArena scratch = begin_scratch();
     String8 full_path = str8_path_append(scratch.arena, build_path, str8_literal("config.conf"));
 
@@ -569,63 +621,491 @@ load_config(void){
     String8 data = os_file_read(scratch.arena, file);
     String8* ptr = &data;
 
-    state = ParsingState_None;
+    cps = ConfigParsingState_None;
     String8 line = {0};
     while(ptr->size){
         line = str8_eat_line(ptr);
         if(str8_starts_with(line, str8_literal("#"))){
             if(str8_compare(line, str8_literal("#date\n"))){
-                state = ParsingState_Date;
+                cps = ConfigParsingState_Date;
             }
             else if(str8_compare(line, str8_literal("#amount\n"))){
-                state = ParsingState_Amount;
+                cps = ConfigParsingState_Amount;
             }
             else if(str8_compare(line, str8_literal("#description\n"))){
-                state = ParsingState_Description;
+                cps = ConfigParsingState_Description;
+            }
+            else if(str8_compare(line, str8_literal("#tabs_selected\n"))){
+                cps = ConfigParsingState_TabsSelected;
+            }
+            else if(str8_compare(line, str8_literal("#collapsables\n"))){
+                cps = ConfigParsingState_Collapsables;
+            }
+            else if(str8_compare(line, str8_literal("#window\n"))){
+                cps = ConfigParsingState_Window;
+            }
+            else if(str8_compare(line, str8_literal("#restored\n"))){
+                cps = ConfigParsingState_Restored;
+            }
+            else if(str8_compare(line, str8_literal("#show_tooltips\n"))){
+                cps = ConfigParsingState_Tooltips;
+            }
+            else if(str8_compare(line, str8_literal("#year\n"))){
+                cps = ConfigParsingState_Year;
             }
         }
-        else if(state == ParsingState_Date){
+        else if(cps == ConfigParsingState_Date){
             String8 word;
             while(line.size){
                 word = str8_eat_word_csv(&line);
-                String8* str = pm->date_names + pm->date_names_count;
-                ++pm->date_names_count;
 
-                memcpy(str->data, word.data, word.count);
-                str->count = word.count;
-                str8_strip_newline(str);
+                if(word.count){
+                    CSVColumnNode* node = (CSVColumnNode*)pool_next(pm->csv_pool);
+                    dll_push_back(pm->date_names, node);
+                    memcpy(node->name, word.data, word.count);
+
+                    ++pm->date_names_count;
+                }
             }
         }
-        else if(state == ParsingState_Amount){
+        else if(cps == ConfigParsingState_Amount){
             String8 word;
             while(line.size){
                 word = str8_eat_word_csv(&line);
-                String8* str = pm->amount_names + pm->amount_names_count;
-                ++pm->amount_names_count;
+                if(word.count){
+                    CSVColumnNode* node = (CSVColumnNode*)pool_next(pm->csv_pool);
+                    dll_push_back(pm->amount_names, node);
+                    memcpy(node->name, word.data, word.count);
 
-                memcpy(str->data, word.data, word.count);
-                str->count = word.count;
-                str8_strip_newline(str);
+                    ++pm->amount_names_count;
+                }
             }
         }
-        else if(state == ParsingState_Description){
+        else if(cps == ConfigParsingState_Description){
             String8 word;
             while(line.size){
                 word = str8_eat_word_csv(&line);
-                String8* str = pm->desc_names + pm->desc_names_count;
-                ++pm->desc_names_count;
 
-                memcpy(str->data, word.data, word.count);
-                str->count = word.count;
-                str8_strip_newline(str);
+                if(word.count){
+                    CSVColumnNode* node = (CSVColumnNode*)pool_next(pm->csv_pool);
+                    dll_push_back(pm->description_names, node);
+                    memcpy(node->name, word.data, word.count);
+
+                    ++pm->description_names_count;
+                }
+            }
+        }
+        else if(cps == ConfigParsingState_TabsSelected){
+            while(line.size){
+                String8 word = str8_eat_word(&line);
+
+                String8Node* str8_node;
+                if(str8_contains(word, str8_literal("quarter_tab_idx"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    pm->quarter_tab_idx = atoi((char*)str8_node->prev->str.str);
+                }
+                else if(str8_contains(word, str8_literal("biannual_tab_idx"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    pm->biannual_tab_idx = atoi((char*)str8_node->prev->str.str);
+                }
+            }
+        }
+        else if(cps == ConfigParsingState_Collapsables){
+            while(line.size){
+                String8 word = str8_eat_word(&line);
+
+                String8Node* str8_node = {0};
+                if(str8_contains(word, str8_literal("draw_month_plan"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    pm->draw_month_plan = atoi((char*)str8_node->prev->str.str);
+                }
+                else if(str8_contains(word, str8_literal("draw_quarter_plan"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    pm->draw_quarter_plan = atoi((char*)str8_node->prev->str.str);
+                }
+                else if(str8_contains(word, str8_literal("draw_biannual_plan"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    pm->draw_biannual_plan = atoi((char*)str8_node->prev->str.str);
+                }
+                else if(str8_contains(word, str8_literal("draw_annual_plan"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    pm->draw_annual_plan = atoi((char*)str8_node->prev->str.str);
+                }
+            }
+        }
+        else if(cps == ConfigParsingState_Window){
+            while(line.size){
+                String8 word = str8_eat_word(&line);
+
+                String8Node* str8_node = {0};
+                if(str8_contains(word, str8_literal("width"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    window_width = atoi((char*)str8_node->prev->str.str);
+                }
+                else if(str8_contains(word, str8_literal("height"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    window_height = atoi((char*)str8_node->prev->str.str);
+                }
+                else if(str8_contains(word, str8_literal("maximized"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    window_maximized = atoi((char*)str8_node->prev->str.str);
+                }
+                else if(str8_contains(word, str8_literal("xpos"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    window_x = atoi((char*)str8_node->prev->str.str);
+                }
+                else if(str8_contains(word, str8_literal("ypos"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    window_y = atoi((char*)str8_node->prev->str.str);
+                }
+            }
+        }
+        else if(cps == ConfigParsingState_Restored){
+            while(line.size){
+                String8 word = str8_eat_word(&line);
+
+                String8Node* str8_node = {0};
+                if(str8_contains(word, str8_literal("left"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    window_restored_rect.left = atoi((char*)str8_node->prev->str.str);
+                }
+                else if(str8_contains(word, str8_literal("top"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    window_restored_rect.top = atoi((char*)str8_node->prev->str.str);
+                }
+                else if(str8_contains(word, str8_literal("right"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    window_restored_rect.right = atoi((char*)str8_node->prev->str.str);
+                }
+                else if(str8_contains(word, str8_literal("bottom"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    window_restored_rect.bottom = atoi((char*)str8_node->prev->str.str);
+                }
+            }
+        }
+        else if(cps == ConfigParsingState_Tooltips){
+            while(line.size){
+                String8 word = str8_eat_word(&line);
+
+                String8Node* str8_node = {0};
+                if(str8_contains(word, str8_literal("tooltips"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    show_tooltips = atoi((char*)str8_node->prev->str.str);
+                }
+            }
+        }
+        else if(cps == ConfigParsingState_Year){
+            while(line.size){
+                String8 word = str8_eat_word(&line);
+
+                String8Node* str8_node = {0};
+                if(str8_contains(word, str8_literal("year_idx"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    pm->year_idx = atoi((char*)str8_node->prev->str.str);
+                    year_config_deserialized = true;
+                }
+                else if(str8_contains(word, str8_literal("month_tab_idx"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    pm->month_tab_idx = atoi((char*)str8_node->prev->str.str);
+                }
             }
         }
     }
-    state = ParsingState_None;
+    cps = ConfigParsingState_None;
+    //if(pm->date_names_count){
+    //    pm->date_names_count = 1;
+    //}
+    //if(pm->amount_names_count){
+    //    pm->amount_names_count = 1;
+    //}
+    //if(pm->description_names_count){
+    //    pm->description_names_count = 1;
+    //}
+
+    os_file_close(file);
+    end_scratch(scratch);
 }
 
 static void
-deserialize_data(void){
+serialize_config(void){
+    Arena* arena = pm->data_arena;
+
+    // column names
+    {
+        s32 count = 0;
+        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#date\n");
+        for(CSVColumnNode* node = pm->date_names->next; node != pm->date_names; node = node->next){
+            if(char_length(node->name)){
+                arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "%s", node->name);
+                if(node->next != pm->date_names){
+                    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, ",");
+                }
+                count++;
+            }
+        }
+        if(count){
+            arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "\n");
+        }
+
+        count = 0;
+        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#amount\n");
+        for(CSVColumnNode* node = pm->amount_names->next; node != pm->amount_names; node = node->next){
+            if(char_length(node->name)){
+                arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "%s", node->name);
+                if(node->next != pm->amount_names){
+                    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, ",");
+                }
+                count++;
+            }
+        }
+        if(count){
+            arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "\n");
+        }
+
+        count = 0;
+        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#description\n");
+        for(CSVColumnNode* node = pm->description_names->next; node != pm->description_names; node = node->next){
+            if(char_length(node->name)){
+                arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "%s", node->name);
+                if(node->next != pm->description_names){
+                    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, ",");
+                }
+                count++;
+            }
+        }
+        if(count){
+            arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "\n");
+        }
+    }
+
+    // date formats
+    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#date_formats\n");
+
+    // tabs selected
+    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#tabs_selected\n");
+    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
+                          "quarter_tab_idx=%i biannual_tab_idx=%i\n", pm->quarter_tab_idx, pm->biannual_tab_idx);
+
+    // collapsables
+    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#collapsables\n");
+    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
+                          "draw_month_plan=%i draw_quarter_plan=%i draw_biannual_plan=%i draw_annual_plan=%i\n",
+                          pm->draw_month_plan, pm->draw_quarter_plan, pm->draw_biannual_plan, pm->draw_annual_plan);
+
+    // window width/height/x/y/restored state
+    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#window\n");
+    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
+                          "xpos=%i ypos=%i width=%i height=%i maximized=%i\n",
+                          (s32)window.rect.x0, (s32)window.rect.y0,
+                          (s32)window.width, (s32)window.height,
+                          window.maximized);
+    if(window.maximized){
+        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#restored\n");
+        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
+                              "left=%i top=%i right=%i bottom=%i\n",
+                              (s32)window_restored_rect.left, (s32)window_restored_rect.top,
+                              (s32)window_restored_rect.right, (s32)window_restored_rect.bottom);
+    }
+
+    // tooltip
+    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#show_tooltips\n");
+    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "show_tooltips=%i\n", show_tooltips);
+
+    // transaction_year
+    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#year\n");
+    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
+            "year_idx=%i month_tab_idx=%i\n", pm->year_idx, pm->month_tab_idx);
+
+    arena->at += snprintf((char*)arena->base + arena->at, arena->size - (s32)arena->at, "\0");
+    ScratchArena scratch = begin_scratch();
+    String8 full_path = str8_path_append(scratch.arena, build_path, str8_literal("config.conf"));
+
+    File file = os_file_open(full_path, GENERIC_WRITE, CREATE_ALWAYS);
+    if(file.handle != INVALID_HANDLE_VALUE){
+        os_file_write(file, arena->base, arena->at);
+    }
+
+    os_file_close(file);
+    end_scratch(scratch);
+    arena_free(pm->data_arena);
+}
+
+static void
+deserialize_year(Year* year){
+    ScratchArena scratch = begin_scratch();
+    String8 filename = str8_fmt(scratch.arena, "%04d.b", year->number);
+    String8 full_path = str8_path_append(scratch.arena, saves_path, filename);
+
+    // todo(rr): I think I prefer this check to encapsulate the function on the outside, but I didn't want to create the file names twice. Maybe think of how you might want to change this, to maybe pass the filename in again
+    if(!os_file_exists(saves_path, filename)){
+        return;
+    }
+
+    File file = os_file_open(full_path, GENERIC_READ, OPEN_EXISTING);
+    if(!file.size){
+        //todo: log error
+        print("Error: file size 0, no data to load. <%s>\n", (char*)full_path.str);
+        os_file_close(file);
+        end_scratch(scratch);
+        return;
+    }
+
+    String8 data = os_file_read(scratch.arena, file);
+    String8* ptr = &data;
+
+    s32 month_idx = 0;
+    tps = TransactionParsingState_None;
+    String8 line = {0};
+    MonthInfo* month;
+    while(ptr->size){
+        line = str8_eat_line(ptr);
+
+        if(str8_starts_with(line, str8_literal("#"))){
+            if(tps == TransactionParsingState_Transaction){
+                year->total_transactions += month->transactions_count;
+                // todo(rr): maybe serialize transactions_count and check to see if it matches here?
+            }
+            if(month_idx == 11){
+                tps = TransactionParsingState_None;
+            }
+
+            if(str8_contains(line, str8_literal("#month"))){
+                tps = TransactionParsingState_Month;
+                month = year->months + month_idx;
+                ++month_idx;
+            }
+        }
+        else if(tps == TransactionParsingState_Month){
+            while(line.size){
+                String8 word = str8_eat_word(&line);
+
+                String8Node* str8_node = {0};
+                if(str8_contains(word, str8_literal("muted"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    month->muted = atoi((char*)str8_node->prev->str.str);
+                }
+            }
+            tps = TransactionParsingState_Transaction;
+        }
+        else if(tps == TransactionParsingState_Transaction){
+
+            Transaction* trans;
+            if(line.size){
+                trans = (Transaction*)pool_next(pm->transaction_pool);
+                dll_push_back(month->transactions, trans);
+                ++month->transactions_count;
+            }
+
+            while(line.size){
+                String8 word = str8_eat_word(&line);
+
+                String8Node* str8_node = {0};
+                if(str8_contains(word, str8_literal("date"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    if(str8_compare(str8_node->prev->str, str8_node->next->str)){
+                        copy_word_to_char(trans->date, str8_literal("\0"));
+                    }
+                    else{
+                        copy_word_to_char(trans->date, str8_node->prev->str);
+                    }
+                }
+                else if(str8_contains(word, str8_literal("amount"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    if(str8_compare(str8_node->prev->str, str8_node->next->str)){
+                        copy_word_to_char(trans->amount, str8_literal("\0"));
+                    }
+                    else{
+                        copy_word_to_char(trans->amount, str8_node->prev->str);
+                    }
+                }
+                else if(str8_contains(word, str8_literal("description"))){
+                    if(!str8_contains_byte(word, '\x1B')){
+                        u32 count = str8_extend_to_char(&word, '\x1B');
+                        str8_advance(&line, count);
+                    }
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    if(str8_compare(str8_node->prev->str, str8_node->next->str)){
+                        copy_word_to_char(trans->description, str8_literal("\0"));
+                    }
+                    else{
+                        copy_word_to_char(trans->description, str8_node->prev->str);
+                    }
+                }
+                else if(str8_contains(word, str8_literal("selection"))){
+                    if(!str8_contains_byte(word, '\x1B')){
+                        u32 count = str8_extend_to_char(&word, '\x1B');
+                        str8_advance(&line, count);
+                    }
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    if(str8_compare(str8_node->prev->str, str8_node->next->str)){
+                        copy_word_to_char(trans->selection, str8_literal("\0"));
+                    }
+                    else{
+                        copy_word_to_char(trans->selection, str8_node->prev->str);
+                    }
+                }
+                else if(str8_contains(word, str8_literal("muted"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    trans->muted = atoi((char*)str8_node->prev->str.str);
+                }
+            }
+        }
+    }
+
+    tps = TransactionParsingState_None;
+    os_file_close(file);
+    end_scratch(scratch);
+}
+
+static void
+serialize_year(Year* year){
+    ScratchArena scratch = begin_scratch();
+    Arena* arena = pm->data_arena;
+
+    String8 filename = str8_fmt(scratch.arena, "%04d.b", year->number);
+    if(year->total_transactions){
+
+        MonthInfo* month;
+        for(s32 m_idx=0; m_idx < Month_Count; ++m_idx){
+            month = year->months + m_idx;
+            arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#month_m%i\n", m_idx);
+            arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "muted=%i\n", month->muted);
+
+            Transaction* t = month->transactions;
+            for(s32 t_idx = 0; t_idx < month->transactions_count; ++t_idx){
+                t = t->next;
+                arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
+                                      "date=%s amount=%s description=%s\x1B selection=%s\x1B muted=%i\n",
+                                      t->date, t->amount, t->description, t->selection, t->muted);
+            }
+        }
+
+        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "\0");
+
+        String8 full_path = str8_path_append(scratch.arena, saves_path, filename);
+
+        File file = os_file_open(full_path, GENERIC_WRITE, CREATE_ALWAYS);
+        if(file.handle != INVALID_HANDLE_VALUE){
+            os_file_write(file, arena->base, arena->at);
+        }
+
+        os_file_close(file);
+        arena_free(pm->data_arena);
+    }
+    else{
+        if(os_file_exists(saves_path, filename)){
+            if(!os_file_delete(saves_path, filename)){
+                print_last_error(GetLastError());
+                assert(1==0); // todo(rr): temporary assert to make sure things are working correctly
+            }
+        }
+    }
+    end_scratch(scratch);
+    arena_free(pm->data_arena);
+}
+
+static void
+deserialize_budget(void){
     ScratchArena scratch = begin_scratch();
     String8 full_path = str8_path_append(scratch.arena, saves_path, str8_literal("budget.b"));
 
@@ -642,38 +1122,30 @@ deserialize_data(void){
     String8* ptr = &data;
 
     s32 month_idx = 0;
-    state = ParsingState_None;
+    bps = BudgetParsingState_None;
     String8 line = {0};
     while(ptr->size){
         line = str8_eat_line(ptr);
 
         if(str8_starts_with(line, str8_literal("#"))){
             if(str8_compare(line, str8_literal("#budget\n"))){
-                state = ParsingState_Budget;
+                bps = BudgetParsingState_Budget;
             }
             else if(str8_compare(line, str8_literal("#category\n"))){
-                state = ParsingState_Category;
-            }
-            else if(str8_contains(line, str8_literal("#month"))){
-                state = ParsingState_Month;
-                pm->month = pm->months + month_idx;
-                ++month_idx;
-            }
-            else if(str8_compare(line, str8_literal("#config\n"))){
-                state = ParsingState_Config;
+                bps = BudgetParsingState_Category;
             }
         }
-        else if(state == ParsingState_Budget){
+        else if(bps == BudgetParsingState_Budget){
             String8 word = str8_eat_word(&line);
 
-            String8Node str8_node = {0};
+            String8Node* str8_node = {0};
             str8_node = str8_split(scratch.arena, word, '=');
-            str8_copy(&pm->budget, &str8_node.prev->str);
-            //copy_word_to_char(pm->budget, str8_node.prev->str);
+            str8_copy(&pm->budget, &str8_node->prev->str);
+            //copy_word_to_char(pm->budget, str8_node->prev->str);
         }
-        else if(state == ParsingState_Category){
+        else if(bps == BudgetParsingState_Category){
             Category* category = (Category*)pool_next(pm->category_pool);
-            dll_push_back(pm->categories, category);
+            dll_push_back(pm->month_categories, category);
             category->rows = (Row*)pool_next(pm->row_pool);
             dll_clear(category->rows);
             ++pm->categories_count;
@@ -681,33 +1153,33 @@ deserialize_data(void){
             while(line.size){
                 String8 word = str8_eat_word(&line);
 
-                String8Node str8_node = {0};
+                String8Node* str8_node = {0};
                 if(str8_contains(word, str8_literal("name"))){
                     if(!str8_contains_byte(word, '\x1B')){
                         u32 count = str8_extend_to_char(&word, '\x1B');
                         str8_advance(&line, count);
                     }
                     str8_node = str8_split(scratch.arena, word, '=');
-                    if(str8_compare(str8_node.prev->str, str8_node.next->str)){
+                    if(str8_compare(str8_node->prev->str, str8_node->next->str)){
                         copy_word_to_char(category->name, str8_literal("\0"));
                     }
                     else{
-                        copy_word_to_char(category->name, str8_node.prev->str);
+                        copy_word_to_char(category->name, str8_node->prev->str);
                     }
                 }
                 else if(str8_contains(word, str8_literal("draw_rows"))){
                     str8_node = str8_split(scratch.arena, word, '=');
-                    category->draw_rows = atoi((char*)str8_node.prev->str.str);
+                    category->draw_rows = atoi((char*)str8_node->prev->str.str);
                 }
                 else if(str8_contains(word, str8_literal("muted"))){
                     str8_node = str8_split(scratch.arena, word, '=');
-                    category->muted = atoi((char*)str8_node.prev->str.str);
+                    category->muted = atoi((char*)str8_node->prev->str.str);
                 }
             }
-            state = ParsingState_Row;
+            bps = BudgetParsingState_Row;
         }
-        else if(state == ParsingState_Row){
-            Category* category = pm->categories->prev;
+        else if(bps == BudgetParsingState_Row){
+            Category* category = pm->month_categories->prev;
             ++category->row_count;
 
             Row* row = (Row*)pool_next(pm->row_pool);
@@ -717,155 +1189,44 @@ deserialize_data(void){
             while(line.size){
                 String8 word = str8_eat_word(&line);
 
-                String8Node str8_node = {0};
+                String8Node* str8_node = {0};
                 if(str8_contains(word, str8_literal("name"))){
                     if(!str8_contains_byte(word, '\x1B')){
                         u32 count = str8_extend_to_char(&word, '\x1B');
                         str8_advance(&line, count);
                     }
                     str8_node = str8_split(scratch.arena, word, '=');
-                    if(str8_compare(str8_node.prev->str, str8_node.next->str)){
+                    if(str8_compare(str8_node->prev->str, str8_node->next->str)){
                         copy_word_to_char(row->name, str8_literal("\0"));
                     }
                     else{
-                        copy_word_to_char(row->name, str8_node.prev->str);
+                        copy_word_to_char(row->name, str8_node->prev->str);
                     }
                 }
                 else if(str8_contains(word, str8_literal("planned"))){
                     str8_node = str8_split(scratch.arena, word, '=');
-                    copy_word_to_char(row->planned, str8_node.prev->str);
+                    copy_word_to_char(row->planned, str8_node->prev->str);
                 }
                 else if(str8_contains(word, str8_literal("muted"))){
                     str8_node = str8_split(scratch.arena, word, '=');
-                    row->muted = atoi((char*)str8_node.prev->str.str);
-                }
-            }
-        }
-        else if(state == ParsingState_Month){
-            while(line.size){
-                String8 word = str8_eat_word(&line);
-
-                String8Node str8_node = {0};
-                if(str8_contains(word, str8_literal("muted"))){
-                    str8_node = str8_split(scratch.arena, word, '=');
-                    pm->month->muted = atoi((char*)str8_node.prev->str.str);
-                }
-            }
-            state = ParsingState_Transaction;
-        }
-        else if(state == ParsingState_Transaction){
-
-            Transaction* trans;
-            if(line.size){
-                trans = (Transaction*)pool_next(pm->transaction_pool);
-                dll_push_back(pm->month->transactions, trans);
-                ++pm->month->transactions_count;
-            }
-
-            while(line.size){
-                String8 word = str8_eat_word(&line);
-
-                String8Node str8_node = {0};
-                if(str8_contains(word, str8_literal("date"))){
-                    str8_node = str8_split(scratch.arena, word, '=');
-                    if(str8_compare(str8_node.prev->str, str8_node.next->str)){
-                        copy_word_to_char(trans->date, str8_literal("\0"));
-                    }
-                    else{
-                        copy_word_to_char(trans->date, str8_node.prev->str);
-                    }
-                }
-                else if(str8_contains(word, str8_literal("amount"))){
-                    str8_node = str8_split(scratch.arena, word, '=');
-                    if(str8_compare(str8_node.prev->str, str8_node.next->str)){
-                        copy_word_to_char(trans->amount, str8_literal("\0"));
-                    }
-                    else{
-                        copy_word_to_char(trans->amount, str8_node.prev->str);
-                    }
-                }
-                else if(str8_contains(word, str8_literal("description"))){
-                    if(!str8_contains_byte(word, '\x1B')){
-                        u32 count = str8_extend_to_char(&word, '\x1B');
-                        str8_advance(&line, count);
-                    }
-                    str8_node = str8_split(scratch.arena, word, '=');
-                    if(str8_compare(str8_node.prev->str, str8_node.next->str)){
-                        copy_word_to_char(trans->description, str8_literal("\0"));
-                    }
-                    else{
-                        copy_word_to_char(trans->description, str8_node.prev->str);
-                    }
-                }
-                else if(str8_contains(word, str8_literal("selection"))){
-                    if(!str8_contains_byte(word, '\x1B')){
-                        u32 count = str8_extend_to_char(&word, '\x1B');
-                        str8_advance(&line, count);
-                    }
-                    str8_node = str8_split(scratch.arena, word, '=');
-                    if(str8_compare(str8_node.prev->str, str8_node.next->str)){
-                        copy_word_to_char(trans->selection, str8_literal("\0"));
-                    }
-                    else{
-                        copy_word_to_char(trans->selection, str8_node.prev->str);
-                    }
-                }
-                else if(str8_contains(word, str8_literal("muted"))){
-                    str8_node = str8_split(scratch.arena, word, '=');
-                    trans->muted = atoi((char*)str8_node.prev->str.str);
-                }
-            }
-        }
-        else if(state == ParsingState_Config){
-            while(line.size){
-                String8 word = str8_eat_word(&line);
-
-                String8Node str8_node = {0};
-                if(str8_contains(word, str8_literal("month_tab_idx"))){
-                    str8_node = str8_split(scratch.arena, word, '=');
-                    pm->month_tab_idx = atoi((char*)str8_node.prev->str.str);
-                }
-                else if(str8_contains(word, str8_literal("quarter_tab_idx"))){
-                    str8_node = str8_split(scratch.arena, word, '=');
-                    pm->quarter_tab_idx = atoi((char*)str8_node.prev->str.str);
-                }
-                else if(str8_contains(word, str8_literal("biannual_tab_idx"))){
-                    str8_node = str8_split(scratch.arena, word, '=');
-                    pm->biannual_tab_idx = atoi((char*)str8_node.prev->str.str);
-                }
-                else if(str8_contains(word, str8_literal("draw_month_plan"))){
-                    str8_node = str8_split(scratch.arena, word, '=');
-                    pm->draw_month_plan = atoi((char*)str8_node.prev->str.str);
-                }
-                else if(str8_contains(word, str8_literal("draw_quarter_plan"))){
-                    str8_node = str8_split(scratch.arena, word, '=');
-                    pm->draw_quarter_plan = atoi((char*)str8_node.prev->str.str);
-                }
-                else if(str8_contains(word, str8_literal("draw_biannual_plan"))){
-                    str8_node = str8_split(scratch.arena, word, '=');
-                    pm->draw_biannual_plan = atoi((char*)str8_node.prev->str.str);
-                }
-                else if(str8_contains(word, str8_literal("draw_annual_plan"))){
-                    str8_node = str8_split(scratch.arena, word, '=');
-                    pm->draw_annual_plan = atoi((char*)str8_node.prev->str.str);
+                    row->muted = atoi((char*)str8_node->prev->str.str);
                 }
             }
         }
     }
 
-    state = ParsingState_None;
+    bps = BudgetParsingState_None;
     os_file_close(file);
     end_scratch(scratch);
 }
 
 static void
-serialize_data(void){
+serialize_budget(void){
     Arena* arena = pm->data_arena;
-    Category* c = pm->categories;
+    Category* c = pm->month_categories;
 
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#budget\n");
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "budget=%s\n", pm->budget.str);
-    //arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "budget=%s\n", pm->budget);
 
     for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
         c = c->next;
@@ -882,28 +1243,6 @@ serialize_data(void){
         }
     }
 
-    for(s32 m_idx=0; m_idx < Month_Count; ++m_idx){
-
-        pm->month = pm->months + m_idx;
-        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#month_m%i\n", m_idx);
-        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "muted=%i\n", pm->month->muted);
-
-        Transaction* t = pm->month->transactions;
-        for(s32 t_idx = 0; t_idx < pm->month->transactions_count; ++t_idx){
-            t = t->next;
-            arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
-                                  "date=%s amount=%s description=%s\x1B selection=%s\x1B muted=%i\n",
-                                  t->date, t->amount, t->description, t->selection, t->muted);
-        }
-    }
-    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#config\n");
-    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
-                          "month_tab_idx=%i quarter_tab_idx=%i biannual_tab_idx=%i\n",
-                          pm->month_tab_idx, pm->quarter_tab_idx, pm->biannual_tab_idx);
-    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
-                          "draw_month_plan=%i draw_quarter_plan=%i draw_biannual_plan=%i draw_annual_plan=%i\n",
-                          pm->draw_month_plan, pm->draw_quarter_plan, pm->draw_biannual_plan, pm->draw_annual_plan);
-
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "\0");
 
     ScratchArena scratch = begin_scratch();
@@ -916,7 +1255,26 @@ serialize_data(void){
 
     os_file_close(file);
     end_scratch(scratch);
+    arena_free(pm->data_arena);
 }
 
+Texture gear_texture;
+static void change_resolution(Window* window, f32 width, f32 height);
+static bool handle_controller_events(Event event);
+static void draw_entire_ui(void);
+static void collect_totals_for_months(void);
+static void do_one_frame(void);
+static void tooltip(String8 str);
+
+static f64 FPS;
+static f64 MSPF;
+static u64 total_frames;
+static u64 frame_count;
+//static u32 simulations;
+static f64 time_elapsed;
+static f64 accumulator;
+
+static u64 last_ticks;
+static u64 frame_tick_start;
 
 #endif

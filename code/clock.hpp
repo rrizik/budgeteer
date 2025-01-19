@@ -14,7 +14,7 @@ struct Clock{
     GetMsElapsed* get_ms_elapsed;
     GetCycles* get_cpu_timer;
 };
-static Clock clock = {0};
+static Clock t_clock = {0};
 
 static u64 get_os_timer_frequency(void);
 static u64 get_os_timer();

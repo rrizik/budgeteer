@@ -102,7 +102,7 @@ d3d_init(HWND window_handle, s32 width, s32 height){
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
     swapChainDesc.Width              = 0; // use window width
     swapChainDesc.Height             = 0; // use window height
-    swapChainDesc.Format             = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+    swapChainDesc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     swapChainDesc.Stereo             = FALSE;
     swapChainDesc.SampleDesc.Count   = 1;
     swapChainDesc.SampleDesc.Quality = 0;
@@ -245,7 +245,7 @@ d3d_init(HWND window_handle, s32 width, s32 height){
             .Height = (u32)1,
             .MipLevels = 1,
             .ArraySize = 1,
-            .Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,
+            .Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
             .SampleDesc = {1, 0},
             .Usage = D3D11_USAGE_IMMUTABLE,
             .BindFlags = D3D11_BIND_SHADER_RESOURCE,
@@ -334,5 +334,58 @@ d3d_release(){
     }
 #endif
 }
+
+static void
+d3d_init_texture_resource(ID3D11ShaderResourceView** shader_resource, Bitmap* bitmap){
+    D3D11_TEXTURE2D_DESC desc = {
+        .Width = (u32)bitmap->width,
+        .Height = (u32)bitmap->height,
+        .MipLevels = 1,
+        .ArraySize = 1,
+        .Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+        .SampleDesc = {1, 0},
+        .Usage = D3D11_USAGE_IMMUTABLE,
+        .BindFlags = D3D11_BIND_SHADER_RESOURCE,
+    };
+
+    D3D11_SUBRESOURCE_DATA data = {
+        .pSysMem = bitmap->base,
+        .SysMemPitch = (u32)bitmap->stride,
+    };
+
+    ID3D11Texture2D* texture;
+    hr = d3d_device->CreateTexture2D(&desc, &data, &texture);
+assert_hr(hr);
+
+    hr = d3d_device->CreateShaderResourceView(texture, 0, shader_resource);
+    assert_hr(hr);
+    texture->Release();
+}
+
+static void
+d3d_resize_window(f32 width, f32 height){
+    if(!d3d_framebuffer_view || !d3d_framebuffer){
+        return;
+    }
+
+    // first you have to release the resources
+    d3d_framebuffer_view->Release();
+    d3d_framebuffer->Release();
+
+    // resize swapchain buffer
+    d3d_swapchain->ResizeBuffers(0, (u32)width, (u32)height, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 0);
+
+    // update render target view with new buffer size
+    hr = d3d_swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&d3d_framebuffer);
+    assert_hr(hr);
+    hr = d3d_device->CreateRenderTargetView(d3d_framebuffer, 0, &d3d_framebuffer_view);
+    assert_hr(hr);
+    d3d_context->OMSetRenderTargets(1, &d3d_framebuffer_view, 0);
+
+    // update viewport
+    d3d_viewport.Width = width;
+    d3d_viewport.Height = height;
+}
+
 
 #endif
