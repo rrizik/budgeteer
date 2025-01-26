@@ -258,7 +258,6 @@ static ImVec4 hover_color;
 static f32 input_padding = 4.0f;
 static f32 totals_number_start = 75.0f;
 
-//static f32 collapse_column_start = 8.0f;
 static f32 collapse_column_start = 30.0f;
 static f32 collapse_column_width = 25.0f;
 
@@ -285,11 +284,23 @@ static f32 x_column_width = 15.0f;
 
 static f32 m_column_start = x_column_start + x_column_width + 5.0f;
 
+static f32 hash_column_start = 25;
+static f32 hash_column_width = 20;
+static f32 date_column_start = hash_column_start + hash_column_width + 10;
+static f32 date_column_width = 80;
+static f32 amount_column_start = date_column_start + date_column_width + 20;
+static f32 amount_column_width = 75;
+static f32 description_column_start = amount_column_start + amount_column_width + 20;
+static f32 description_column_width = 160;
+static f32 category_select_column_start = description_column_start + description_column_width + 10;
+static f32 category_select_column_width = 100;
+static f32 plus_expense_column_start = category_select_column_start + category_select_column_width + 10;
+static f32 plus_expense_column_width = 23;
+static f32 x_expense_column_start = plus_expense_column_start + plus_expense_column_width;
+
 static f32 csv_date_plus_button_start = 160.0f;
 static f32 csv_date_plus_button_width = 15.0f;
 static f32 csv_date_x_button_start = csv_date_plus_button_start + csv_date_plus_button_width + 5.0f;
-
-static f32 csv_amount_plus_button_start = 100.0f;
 
 static void custom_separator(f32 thickness = 1.0f) {
     float columnWidth = ImGui::GetColumnWidth();
@@ -306,21 +317,6 @@ static void custom_separator(f32 thickness = 1.0f) {
 
     ImGui::Dummy(ImVec2(0.0f, thickness));
 }
-
-static f32 hash_column_start = 25;
-static f32 hash_column_width = 20;
-static f32 date_column_start = hash_column_start + hash_column_width + 10;
-static f32 date_column_width = 80;
-static f32 amount_column_start = date_column_start + date_column_width + 20;
-static f32 amount_column_width = 75;
-static f32 description_column_start = amount_column_start + amount_column_width + 20;
-static f32 description_column_width = 160;
-static f32 category_select_column_start = description_column_start + description_column_width + 10;
-static f32 category_select_column_width = 100;
-static f32 plus_expense_column_start = category_select_column_start + category_select_column_width + 10;
-static f32 plus_expense_column_width = 23;
-static f32 x_expense_column_start = plus_expense_column_start + plus_expense_column_width;
-
 
 static bool
 char_compare(char* left, char* right){
@@ -413,7 +409,6 @@ str8_strip_newline(String8* string){
     return(result);
 }
 
-// todo: verify that I need to do this
 static bool
 str8_strip_quotes(String8* string){
     bool result = false;

@@ -6,29 +6,20 @@ A budgeting program.
 As of August 2024, this is only a Win32 program. There are plans to create Mac and Linux releases, but these are not scheduled anytime soon.
 
 ## Structure
-The program consists of the following files and directories:
+When you download the Zip file, it will consists of the following files and directories:
 
 - **budgeteer.exe**
 - **config.conf**
-- **saves\budget.b**
-- **shader\*.hlsl**
+- **assets\sprites**
 
 ## Configuration (`config.conf`)
 
-The `config.conf` file is used to specify which columns you are interested in parsing from CSV files. We support parsing three columns: `date`, `amount`, and `description`.
+Most of the serialized config is stored in `config.conf`. You can modify this file manually, but the long term goal is to be able to edit this file from the program directly.The format will look like this:
 
-The format will look like this:
-```plaintext
-#date
-date,Date,DATE,Post Date
-#amount
-amount amount,Debit,AMOUNT
-#description
-Description, description dddd, desc
-```
+## Loading a CSV file
 
-This allows the user to specify multiple names in case they are loading data from different CSV files that define different headers. This also makes it easier for me, as the programmer, to avoid modifying or touching a CSV file before it's loaded. This structure might change in the future.
+To load a CSV file, make sure you press the gear wheel next to the Load CSV button, and specify which CSV columns you want to load by typing them in. Simply inspect the CSV file and look to see which columns are relevant to you.
 
 ## Note
-As this is still a new program, many aspects are volatile and subject to change. For example, maybe of the files will be deleted/removed including some files in the src that are not being used and the shader directory will be removed. Other things like how the config file is being used and potentially more might change in the near future.
+As this is still a new program, everything is subject to be changed/modified/deleted as necessary. 
 

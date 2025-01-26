@@ -727,10 +727,7 @@ draw_entire_ui(void){
             }
             tooltip(str8_literal("Add New Category."));
 
-            //custom_separator();
-
-            // todo: do I even need this?
-            //note: popluate with 0's
+            //note: popluate empty planned with 0's
             Category* category = pm->month_categories;
             for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
                 category = category->next;
@@ -915,7 +912,7 @@ draw_entire_ui(void){
                                 s32 from_idx = *payload_data;
                                 if(from_idx != r_idx){
                                     Row* r = category->rows;
-                                    // todo: why do I do this?
+                                    // note(rr): iterate to the correct node, since we cant index with linked lists
                                     for(s32 i=0; i <= from_idx; ++i){
                                         r = r->next;
                                     }
@@ -1726,8 +1723,7 @@ draw_entire_ui(void){
             ImGui::EndPopup();
         }
 
-        // todo(rr): Do I even need this?
-        // note: popluate amount's with 0's
+        // note: popluate empty amount's in transactions with 0's
         Transaction* trans = month->transactions;
         for(s32 t_idx = 0; t_idx < month->transactions_count; ++t_idx){
             trans = trans->next;
@@ -1768,7 +1764,6 @@ draw_entire_ui(void){
         }
 
         // note: render transactions
-        //ImGui::SliderFloat("Factor", &minus_padding, 0.0f, 100.0f);
         ImGui::BeginChild("transactions_child", ImVec2(0, 0), true, 0);
         trans = month->transactions;
         f32 minus_padding = 8;
