@@ -1,6 +1,10 @@
 #ifndef CLOCK_H
 #define CLOCK_H
 
+#ifndef CLOCK_TIMER
+#define CLOCK_TIMER __rdtsc()
+#endif
+
 typedef u64 GetTicks(void);
 typedef f64 GetSecondsElapsed(u64 start, u64 end);
 typedef f64 GetMsElapsed(u64 start, u64 end);

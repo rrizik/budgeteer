@@ -1,10 +1,6 @@
 #ifndef CLOCK_C
 #define CLOCK_C
 
-#ifndef CLOCK_TIMER
-#define CLOCK_TIMER __rdtsc()
-#endif
-
 static u64
 get_os_timer_frequency(void){
     LARGE_INTEGER frequency;
