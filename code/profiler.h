@@ -1,6 +1,5 @@
-#ifndef PROFILER_TIMER
-#define PROFILER_TIMER __rdtsc()
-#endif
+#ifndef PROFILER_H
+#define PROFILER_H
 
 ///////////////////////////////
 // NOTE: Profiler
@@ -9,6 +8,10 @@
 // TODO:
 // Clear profiler anchors, so that we can use it in games
 // Introduce a back buffer to collect anchors for each frame. This way if we get a spike, we can pause and use a scrubber to look at the frame that spiked and analyize it
+
+#ifndef PROFILER_TIMER
+#define PROFILER_TIMER __rdtsc()
+#endif
 
 #ifndef PROFILER
 #define PROFILER 0
@@ -161,3 +164,4 @@ end_profiler_(void){
     print_anchor_data(total_cpu_elapsed, cpu_freq);
 }
 
+#endif

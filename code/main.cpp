@@ -727,7 +727,7 @@ draw_entire_ui(void){
             }
             tooltip(str8_literal("Add New Category."));
 
-            //note: popluate empty planned with 0's
+            //note: popluate empty planned with 0's for visual appeal
             Category* category = pm->month_categories;
             for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
                 category = category->next;
@@ -1723,7 +1723,7 @@ draw_entire_ui(void){
             ImGui::EndPopup();
         }
 
-        // note: popluate empty amount's in transactions with 0's
+        // note: popluate empty amount's in transactions with 0's for visual appeal
         Transaction* trans = month->transactions;
         for(s32 t_idx = 0; t_idx < month->transactions_count; ++t_idx){
             trans = trans->next;
