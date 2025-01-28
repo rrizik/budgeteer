@@ -15,19 +15,19 @@
 #include "win32_base_inc.h"
 
 #define PROFILER 1
-#define PROFILER_TIMER __RDTSC
+#define PROFILER_TIMER READ_TIMESTAMP_COUNTER
 #include "profiler.h"
+#define CLOCK_TIMER READ_TIMESTAMP_COUNTER
+#include "clock.hpp"
 
 #include "input.hpp"
-#define CLOCK_TIMER __RDTSC
-#include "clock.hpp"
 #include "window.hpp"
 #include "bitmap.hpp"
 #include "d3d11_init.hpp"
 #include <time.h>
 
-#include "input.cpp"
 #include "clock.cpp"
+#include "input.cpp"
 #include "bitmap.cpp"
 #include "d3d11_init.cpp"
 

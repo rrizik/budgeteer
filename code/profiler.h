@@ -9,12 +9,12 @@
 // Clear profiler anchors, so that we can use it in games
 // Introduce a back buffer to collect anchors for each frame. This way if we get a spike, we can pause and use a scrubber to look at the frame that spiked and analyize it
 
-#ifndef PROFILER_TIMER
-#define PROFILER_TIMER __rdtsc()
-#endif
-
 #ifndef PROFILER
 #define PROFILER 0
+#endif
+
+#ifndef PROFILER_TIMER
+#define PROFILER_TIMER __rdtsc()
 #endif
 
 #if PROFILER

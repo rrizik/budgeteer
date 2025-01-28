@@ -20,11 +20,11 @@ struct Clock{
 };
 static Clock t_clock = {0};
 
-static u64 get_os_timer_frequency(void);
-static u64 get_os_timer();
-static u64 get_cpu_timer();
-static f64 get_seconds_elapsed(u64 end, u64 start);
-static f64 get_ms_elapsed(u64 end, u64 start);
-static void init_clock(Clock* clock);
+static u64 clock_get_os_timer_frequency(void);
+static u64 clock_get_os_timer();
+static u64 clock_get_cpu_timer();
+static f64 clock_get_seconds_elapsed(u64 end, u64 start);
+static f64 clock_get_ms_elapsed(u64 end, u64 start);
+static void clock_init(Clock* clock);
 
 #endif
