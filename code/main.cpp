@@ -2327,10 +2327,6 @@ do_one_frame(void){
 }
 
 s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 window_type){
-#if defined(ARCH_ARM) || defined(ARCH_ARM64)
-    enable_arm_cycle_counter(); // call the function
-#endif
-
     begin_profiler();
 
 
