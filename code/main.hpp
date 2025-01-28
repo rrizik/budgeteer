@@ -154,6 +154,16 @@ typedef struct CSVColumnNode{
     char name[CSV_COLUMN_NAME_SIZE];
 } CSVColumnNode;
 
+typedef struct CSV_Profile{
+    CSV_Profile* next;
+    CSV_Profile* prev;
+    char file_path[1024];
+    char name[128];
+    char date[128];
+    char amount[128];
+    char description[1024];
+} CSV_Profile;
+
 #define CONFIG_NAMES_COUNT 32
 #define SELECTION_LIST_SIZE 128
 typedef struct PermanentMemory{
@@ -163,6 +173,7 @@ typedef struct PermanentMemory{
     PoolArena* row_pool;
     PoolArena* transaction_pool;
     PoolArena* csv_pool;
+    PoolArena* csv_profile_pool;
     Arena* data_arena;
 
     // category/rows/months/transactions
@@ -200,6 +211,10 @@ typedef struct PermanentMemory{
     u32 amount_names_count;
     u32 description_names_count;
     u32 date_formats_count;
+
+    CSV_Profile* csv_profile;
+    s32 csv_profile_count;
+    s32 csv_profile_idx;
 
     // for setting tab flags
     u32 month_tab_flags[12];

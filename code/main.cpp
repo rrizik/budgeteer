@@ -1505,223 +1505,241 @@ draw_entire_ui(void){
             ImGui::SetNextWindowPos(button_pos, ImGuiCond_Appearing);
             ImGui::SetNextWindowSize(ImVec2(700, 500), ImGuiCond_Always);
 
-            ImGui::OpenPopup("CSV Settings");
+            ImGui::OpenPopup("CSV Profile");
         }
-        tooltip(str8_literal("CSV Settings."));
+        tooltip(str8_literal("CSV Profile."));
         ImGui::PopStyleVar();
 
-        if(ImGui::BeginPopupModal("CSV Settings", 0, ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoMove)){
-
-            ImGui::BeginChild("Child5", ImVec2(0, ImGui::GetContentRegionAvail().y * 0.45), true, 0);
-
-            ImGui::SeparatorText("CSV Column Names");
-
-            CSVColumnNode* node;
-            ImGui::Columns(3, 0, false);
-            ImGui::SetColumnWidth(0, 222.0f);
-            ImGui::SetColumnWidth(1, 222.0f);
-            ImGui::SetColumnWidth(2, 222.0f);
-
-            ImGui::Text("Date Column:");
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_plus_button_start);
-            if(ImGui::Button("+##add_csv_date_column")){
-                CSVColumnNode* node = (CSVColumnNode*)pool_next(pm->csv_pool);
-                dll_push_back(pm->date_names, node);
-                pm->date_names_count++;
+        if(ImGui::BeginPopupModal("CSV Profile", 0, ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoMove)){
+            if(pm->csv_profile_count == 0){
+                CSV_Profile* node = (CSV_Profile*)pool_next(pm->csv_profile_pool);
+                dll_push_back(pm->csv_profile, node);
+                pm->csv_profile_count++;
             }
-            tooltip(str8_literal("Add date column name to search for when loading CSV files."));
 
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_x_button_start);
-            if(ImGui::Button("x##remove_all_csv_date_column")){
-                node = pm->date_names;
-                for(s32 c_idx=0; c_idx < pm->date_names_count; ++c_idx){
-                    node = node->next;
-                    dll_remove(node);
-                    pool_free(pm->csv_pool, node);
-                    node = pm->date_names;
-                }
-                dll_clear(pm->date_names);
-                pm->date_names_count = 0;
-            }
-            tooltip(str8_literal("Remove all date column names."));
-
-            f32 minus_padding = 8;
-            ImGui::BeginChild("date_names_child", ImVec2(0, 0), true, 0);
-            String8 unique_fmt;
-            node = pm->date_names;
-            for(s32 c_idx=0; c_idx < pm->date_names_count; ++c_idx){
-                node = node->next;
-                unique_fmt = str8_fmt(tm->frame_arena, "##CSV_Dates%i\n", c_idx);
-                ImGui::InputText((char*)unique_fmt.data, node->name, 1024);
-
-                ImGui::SameLine();
-                ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_x_button_start - minus_padding);
-                unique_fmt = str8_fmt(tm->frame_arena, "x##remove_csv_date_column%i\n", c_idx);
-                if(ImGui::Button((char*)unique_fmt.data)){
-                    dll_remove(node);
-                    pool_free(pm->csv_pool, node);
-
-                    --pm->date_names_count;
-                }
-                tooltip(str8_literal("Remove date column name."));
-            }
-            ImGui::EndChild();
-
-            ImGui::NextColumn();
-            ImGui::Text("Amount Column:");
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_plus_button_start);
-            if(ImGui::Button("+##add_csv_amounts_column")){
-                CSVColumnNode* node = (CSVColumnNode*)pool_next(pm->csv_pool);
-                dll_push_back(pm->amount_names, node);
-                pm->amount_names_count++;
-            }
-            tooltip(str8_literal("Add amount column name to search for when loading CSV files."));
-
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_x_button_start);
-            if(ImGui::Button("x##remove_all_csv_amount_column")){
-                node = pm->amount_names;
-                for(s32 c_idx=0; c_idx < pm->amount_names_count; ++c_idx){
-                    node = node->next;
-                    dll_remove(node);
-                    pool_free(pm->csv_pool, node);
-                    node = pm->amount_names;
-                }
-                dll_clear(pm->amount_names);
-                pm->amount_names_count = 0;
-            }
-            tooltip(str8_literal("Remove all amount column names."));
-
-            ImGui::BeginChild("amount_names_child", ImVec2(0, 0), true, 0);
-            node = pm->amount_names;
-            for(s32 c_idx=0; c_idx < pm->amount_names_count; ++c_idx){
-                node = node->next;
-                unique_fmt = str8_fmt(tm->frame_arena, "##CSV_Amounts%i\n", c_idx);
-                ImGui::InputText((char*)unique_fmt.data, node->name, 1024);
-
-                ImGui::SameLine();
-                ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_x_button_start - minus_padding);
-                unique_fmt = str8_fmt(tm->frame_arena, "x##remove_csv_amount_column%i\n", c_idx);
-                if(ImGui::Button((char*)unique_fmt.data)){
-                    dll_remove(node);
-                    pool_free(pm->csv_pool, node);
-
-                    --pm->amount_names_count;
-                }
-                tooltip(str8_literal("Remove amount column name."));
-            }
-            ImGui::EndChild();
-
-            ImGui::NextColumn();
-            ImGui::Text("Description Column:");
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_plus_button_start);
-            if(ImGui::Button("+##add_csv_description_column")){
-                CSVColumnNode* node = (CSVColumnNode*)pool_next(pm->csv_pool);
-                dll_push_back(pm->description_names, node);
-                pm->description_names_count++;
-            }
-            tooltip(str8_literal("Add description column name to search for when loading CSV files."));
-
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_x_button_start);
-            if(ImGui::Button("x##remove_all_csv_description_column")){
-                node = pm->description_names;
-                for(s32 c_idx=0; c_idx < pm->description_names_count; ++c_idx){
-                    node = node->next;
-                    dll_remove(node);
-                    pool_free(pm->csv_pool, node);
-                    node = pm->description_names;
-                }
-                dll_clear(pm->description_names);
-                pm->description_names_count = 0;
-            }
-            tooltip(str8_literal("Remove all description column names."));
-
-            ImGui::BeginChild("description_names_child", ImVec2(0, 0), true, 0);
-            node = pm->description_names;
-            for(s32 c_idx=0; c_idx < pm->description_names_count; ++c_idx){
-                node = node->next;
-                unique_fmt = str8_fmt(tm->frame_arena, "##CSV_Description%i\n", c_idx);
-                ImGui::InputText((char*)unique_fmt.data, node->name, 1024);
-
-                ImGui::SameLine();
-                ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_x_button_start - minus_padding);
-                unique_fmt = str8_fmt(tm->frame_arena, "x##remove_csv_description_column%i\n", c_idx);
-                if(ImGui::Button((char*)unique_fmt.data)){
-                    dll_remove(node);
-                    pool_free(pm->csv_pool, node);
-
-                    --pm->description_names_count;
-                }
-                tooltip(str8_literal("Remove description column name."));
-            }
-            ImGui::EndChild();
-            ImGui::EndChild();
-
-            ImGui::BeginChild("Child6", ImVec2(0, ImGui::GetContentRegionAvail().y * 0.85), true, 0);
-            ImGui::SeparatorText("CSV Date Formats");
-            ImGui::Text("Date Formats:");
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_plus_button_start);
-            if(ImGui::Button("+##add_csv_date_format")){
-                //CSVColumnNode* node = (CSVColumnNode*)pool_next(pm->csv_pool);
-                //dll_push_back(pm->date_formats, node);
-                //pm->date_formats_count++;
-            }
-            tooltip(str8_literal("Add date formats for the CSV loader to cosnider."));
-
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_x_button_start);
-            if(ImGui::Button("x##remove_all_date_formats")){
-                node = pm->date_formats;
-                for(s32 c_idx=0; c_idx < pm->date_formats_count; ++c_idx){
-                    node = node->next;
-                    dll_remove(node);
-                    pool_free(pm->csv_pool, node);
-                    node = pm->date_formats;
-                }
-                dll_clear(pm->date_formats);
-                pm->date_formats_count = 0;
-            }
-            tooltip(str8_literal("Remove all date formats."));
-
-            node = pm->date_formats;
-            for(s32 c_idx=0; c_idx < pm->date_formats_count; ++c_idx){
-                node = node->next;
-                unique_fmt = str8_fmt(tm->frame_arena, "##CSV_Description%i\n", c_idx);
-                ImGui::InputText((char*)unique_fmt.data, node->name, 1024);
-
-                ImGui::SameLine();
-                ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_x_button_start);
-                unique_fmt = str8_fmt(tm->frame_arena, "x##remove_date_format%i\n", c_idx);
-                if(ImGui::Button((char*)unique_fmt.data)){
-                    dll_remove(node);
-                    pool_free(pm->csv_pool, node);
-
-                    --pm->description_names_count;
-                }
-                tooltip(str8_literal("Remove date format."));
-            }
-            ImGui::EndChild();
-
-            ImGui::BeginChild("Child7", ImVec2(0, 0), true, ImGuiWindowFlags_NoScrollbar);
-            if(ImGui::Button("Okay")){
-                //serialize_config();
-                ImGui::CloseCurrentPopup();
-            }
-            tooltip(str8_literal("Submit changes."));
-            ImGui::EndChild();
+            CSV_Profile* profile = pm->csv_profile + pm->csv_profile_idx;
+            ImGui::InputText("##name", profile->name, 1024);
+            ImGui::InputText("##date", profile->date, 128);
+            ImGui::InputText("##amount", profile->amount, 1024);
+            ImGui::InputText("##description", profile->description, 128);
 
             if(controller_button_pressed(KeyCode_ESCAPE, true)){
-                //serialize_config();
                 ImGui::CloseCurrentPopup();
             }
             ImGui::EndPopup();
         }
+        //if(ImGui::BeginPopupModal("CSV Settings", 0, ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoMove)){
+
+        //    ImGui::BeginChild("Child5", ImVec2(0, ImGui::GetContentRegionAvail().y * 0.45), true, 0);
+
+        //    ImGui::SeparatorText("CSV Column Names");
+
+        //    CSVColumnNode* node;
+        //    ImGui::Columns(3, 0, false);
+        //    ImGui::SetColumnWidth(0, 222.0f);
+        //    ImGui::SetColumnWidth(1, 222.0f);
+        //    ImGui::SetColumnWidth(2, 222.0f);
+
+        //    ImGui::Text("Date Column:");
+        //    ImGui::SameLine();
+        //    ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_plus_button_start);
+        //    if(ImGui::Button("+##add_csv_date_column")){
+        //        CSVColumnNode* node = (CSVColumnNode*)pool_next(pm->csv_pool);
+        //        dll_push_back(pm->date_names, node);
+        //        pm->date_names_count++;
+        //    }
+        //    tooltip(str8_literal("Add date column name to search for when loading CSV files."));
+
+        //    ImGui::SameLine();
+        //    ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_x_button_start);
+        //    if(ImGui::Button("x##remove_all_csv_date_column")){
+        //        node = pm->date_names;
+        //        for(s32 c_idx=0; c_idx < pm->date_names_count; ++c_idx){
+        //            node = node->next;
+        //            dll_remove(node);
+        //            pool_free(pm->csv_pool, node);
+        //            node = pm->date_names;
+        //        }
+        //        dll_clear(pm->date_names);
+        //        pm->date_names_count = 0;
+        //    }
+        //    tooltip(str8_literal("Remove all date column names."));
+
+        //    f32 minus_padding = 8;
+        //    ImGui::BeginChild("date_names_child", ImVec2(0, 0), true, 0);
+        //    String8 unique_fmt;
+        //    node = pm->date_names;
+        //    for(s32 c_idx=0; c_idx < pm->date_names_count; ++c_idx){
+        //        node = node->next;
+        //        unique_fmt = str8_fmt(tm->frame_arena, "##CSV_Dates%i\n", c_idx);
+        //        ImGui::InputText((char*)unique_fmt.data, node->name, 1024);
+
+        //        ImGui::SameLine();
+        //        ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_x_button_start - minus_padding);
+        //        unique_fmt = str8_fmt(tm->frame_arena, "x##remove_csv_date_column%i\n", c_idx);
+        //        if(ImGui::Button((char*)unique_fmt.data)){
+        //            dll_remove(node);
+        //            pool_free(pm->csv_pool, node);
+
+        //            --pm->date_names_count;
+        //        }
+        //        tooltip(str8_literal("Remove date column name."));
+        //    }
+        //    ImGui::EndChild();
+
+        //    ImGui::NextColumn();
+        //    ImGui::Text("Amount Column:");
+        //    ImGui::SameLine();
+        //    ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_plus_button_start);
+        //    if(ImGui::Button("+##add_csv_amounts_column")){
+        //        CSVColumnNode* node = (CSVColumnNode*)pool_next(pm->csv_pool);
+        //        dll_push_back(pm->amount_names, node);
+        //        pm->amount_names_count++;
+        //    }
+        //    tooltip(str8_literal("Add amount column name to search for when loading CSV files."));
+
+        //    ImGui::SameLine();
+        //    ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_x_button_start);
+        //    if(ImGui::Button("x##remove_all_csv_amount_column")){
+        //        node = pm->amount_names;
+        //        for(s32 c_idx=0; c_idx < pm->amount_names_count; ++c_idx){
+        //            node = node->next;
+        //            dll_remove(node);
+        //            pool_free(pm->csv_pool, node);
+        //            node = pm->amount_names;
+        //        }
+        //        dll_clear(pm->amount_names);
+        //        pm->amount_names_count = 0;
+        //    }
+        //    tooltip(str8_literal("Remove all amount column names."));
+
+        //    ImGui::BeginChild("amount_names_child", ImVec2(0, 0), true, 0);
+        //    node = pm->amount_names;
+        //    for(s32 c_idx=0; c_idx < pm->amount_names_count; ++c_idx){
+        //        node = node->next;
+        //        unique_fmt = str8_fmt(tm->frame_arena, "##CSV_Amounts%i\n", c_idx);
+        //        ImGui::InputText((char*)unique_fmt.data, node->name, 1024);
+
+        //        ImGui::SameLine();
+        //        ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_x_button_start - minus_padding);
+        //        unique_fmt = str8_fmt(tm->frame_arena, "x##remove_csv_amount_column%i\n", c_idx);
+        //        if(ImGui::Button((char*)unique_fmt.data)){
+        //            dll_remove(node);
+        //            pool_free(pm->csv_pool, node);
+
+        //            --pm->amount_names_count;
+        //        }
+        //        tooltip(str8_literal("Remove amount column name."));
+        //    }
+        //    ImGui::EndChild();
+
+        //    ImGui::NextColumn();
+        //    ImGui::Text("Description Column:");
+        //    ImGui::SameLine();
+        //    ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_plus_button_start);
+        //    if(ImGui::Button("+##add_csv_description_column")){
+        //        CSVColumnNode* node = (CSVColumnNode*)pool_next(pm->csv_pool);
+        //        dll_push_back(pm->description_names, node);
+        //        pm->description_names_count++;
+        //    }
+        //    tooltip(str8_literal("Add description column name to search for when loading CSV files."));
+
+        //    ImGui::SameLine();
+        //    ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_x_button_start);
+        //    if(ImGui::Button("x##remove_all_csv_description_column")){
+        //        node = pm->description_names;
+        //        for(s32 c_idx=0; c_idx < pm->description_names_count; ++c_idx){
+        //            node = node->next;
+        //            dll_remove(node);
+        //            pool_free(pm->csv_pool, node);
+        //            node = pm->description_names;
+        //        }
+        //        dll_clear(pm->description_names);
+        //        pm->description_names_count = 0;
+        //    }
+        //    tooltip(str8_literal("Remove all description column names."));
+
+        //    ImGui::BeginChild("description_names_child", ImVec2(0, 0), true, 0);
+        //    node = pm->description_names;
+        //    for(s32 c_idx=0; c_idx < pm->description_names_count; ++c_idx){
+        //        node = node->next;
+        //        unique_fmt = str8_fmt(tm->frame_arena, "##CSV_Description%i\n", c_idx);
+        //        ImGui::InputText((char*)unique_fmt.data, node->name, 1024);
+
+        //        ImGui::SameLine();
+        //        ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_x_button_start - minus_padding);
+        //        unique_fmt = str8_fmt(tm->frame_arena, "x##remove_csv_description_column%i\n", c_idx);
+        //        if(ImGui::Button((char*)unique_fmt.data)){
+        //            dll_remove(node);
+        //            pool_free(pm->csv_pool, node);
+
+        //            --pm->description_names_count;
+        //        }
+        //        tooltip(str8_literal("Remove description column name."));
+        //    }
+        //    ImGui::EndChild();
+        //    ImGui::EndChild();
+
+        //    ImGui::BeginChild("Child6", ImVec2(0, ImGui::GetContentRegionAvail().y * 0.85), true, 0);
+        //    ImGui::SeparatorText("CSV Date Formats");
+        //    ImGui::Text("Date Formats:");
+        //    ImGui::SameLine();
+        //    ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_plus_button_start);
+        //    if(ImGui::Button("+##add_csv_date_format")){
+        //        //CSVColumnNode* node = (CSVColumnNode*)pool_next(pm->csv_pool);
+        //        //dll_push_back(pm->date_formats, node);
+        //        //pm->date_formats_count++;
+        //    }
+        //    tooltip(str8_literal("Add date formats for the CSV loader to cosnider."));
+
+        //    ImGui::SameLine();
+        //    ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_x_button_start);
+        //    if(ImGui::Button("x##remove_all_date_formats")){
+        //        node = pm->date_formats;
+        //        for(s32 c_idx=0; c_idx < pm->date_formats_count; ++c_idx){
+        //            node = node->next;
+        //            dll_remove(node);
+        //            pool_free(pm->csv_pool, node);
+        //            node = pm->date_formats;
+        //        }
+        //        dll_clear(pm->date_formats);
+        //        pm->date_formats_count = 0;
+        //    }
+        //    tooltip(str8_literal("Remove all date formats."));
+
+        //    node = pm->date_formats;
+        //    for(s32 c_idx=0; c_idx < pm->date_formats_count; ++c_idx){
+        //        node = node->next;
+        //        unique_fmt = str8_fmt(tm->frame_arena, "##CSV_Description%i\n", c_idx);
+        //        ImGui::InputText((char*)unique_fmt.data, node->name, 1024);
+
+        //        ImGui::SameLine();
+        //        ImGui::SetCursorPosX(ImGui::GetColumnOffset(-1) + csv_date_x_button_start);
+        //        unique_fmt = str8_fmt(tm->frame_arena, "x##remove_date_format%i\n", c_idx);
+        //        if(ImGui::Button((char*)unique_fmt.data)){
+        //            dll_remove(node);
+        //            pool_free(pm->csv_pool, node);
+
+        //            --pm->description_names_count;
+        //        }
+        //        tooltip(str8_literal("Remove date format."));
+        //    }
+        //    ImGui::EndChild();
+
+        //    ImGui::BeginChild("Child7", ImVec2(0, 0), true, ImGuiWindowFlags_NoScrollbar);
+        //    if(ImGui::Button("Okay")){
+        //        //serialize_config();
+        //        ImGui::CloseCurrentPopup();
+        //    }
+        //    tooltip(str8_literal("Submit changes."));
+        //    ImGui::EndChild();
+
+        //    if(controller_button_pressed(KeyCode_ESCAPE, true)){
+        //        //serialize_config();
+        //        ImGui::CloseCurrentPopup();
+        //    }
+        //    ImGui::EndPopup();
+        //}
 
         // note: popluate empty amount's in transactions with 0's for visual appeal
         Transaction* trans = month->transactions;
@@ -2358,18 +2376,20 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         show_cursor(true);
 
         // create pools
-        pm->category_pool        = push_pool(&pm->arena, sizeof(Category), 256);
-        pm->row_pool             = push_pool(&pm->arena, sizeof(Row), 2048);
-        pm->transaction_pool     = push_pool(&pm->arena, sizeof(Transaction), 8192);
-        pm->csv_pool = push_pool(&pm->arena, sizeof(CSVColumnNode), 128);
+        pm->category_pool    = push_pool(&pm->arena, sizeof(Category), 256);
+        pm->row_pool         = push_pool(&pm->arena, sizeof(Row), 2048);
+        pm->transaction_pool = push_pool(&pm->arena, sizeof(Transaction), 8192);
+        pm->csv_pool         = push_pool(&pm->arena, sizeof(CSVColumnNode), 128);
+        pm->csv_profile_pool = push_pool(&pm->arena, sizeof(CSV_Profile), 32);
         // todo(rr): maybe I can just use scratch memory? I don't think I need this
-        pm->data_arena           = push_arena(&pm->arena, MB(1));
+        pm->data_arena       = push_arena(&pm->arena, MB(1));
 
         // setup free list from pools
         pool_free_all(pm->category_pool);
         pool_free_all(pm->row_pool);
         pool_free_all(pm->transaction_pool);
         pool_free_all(pm->csv_pool);
+        pool_free_all(pm->csv_profile_pool);
 
         // setup sentinel node or categories
         pm->month_categories = (Category*)pool_next(pm->category_pool);
@@ -2390,6 +2410,8 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         dll_clear(pm->description_names);
         pm->date_formats = (CSVColumnNode*)pool_next(pm->csv_pool);
         dll_clear(pm->date_formats);
+        pm->csv_profile = (CSV_Profile*)pool_next(pm->csv_profile_pool);
+        dll_clear(pm->csv_profile);
 
         // give selection list memory
         pm->selection_list = push_array(tm->options_arena, String8, 1024);
