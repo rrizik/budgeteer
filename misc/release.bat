@@ -24,6 +24,7 @@ pushd ..\release
 echo - Deleting contents of /release dir 
 IF EXIST budgeteer (
     rmdir /S /Q budgeteer
+    rmdir /S /Q budgeteer.zip
 )
 mkdir budgeteer
 
@@ -41,7 +42,7 @@ mkdir budgeteer
 :: copy over exe, config, and md files
 echo - Copying over files
 copy /Y ..\build\budgeteer.exe .\budgeteer
-copy /Y ..\build\config.conf .\budgeteer
+::copy /Y ..\build\config.conf .\budgeteer
 copy /Y ..\README.md .\budgeteer
 
 :: copy over assets
