@@ -1,5 +1,22 @@
 #include "main.hpp"
 
+//static void
+//setup_date_formats(){
+//    pm->date_formats = push_struct(pm->date_formats_arena, Date_Format);
+//    dll_clear(pm->date_formats);
+//
+//    Date_Format* format;
+//    format = push_struct(pm->date_formats_arena, Date_Format);
+//    memcpy(format->name, "mm/dd/yyy", 10);
+//    ++pm->date_formats_count;
+//    format = push_struct(pm->date_formats_arena, Date_Format);
+//    memcpy(format->name, "dd/mm/yyy", 10);
+//    ++pm->date_formats_count;
+//    format = push_struct(pm->date_formats_arena, Date_Format);
+//    memcpy(format->name, "yyy/mm/dd", 10);
+//    ++pm->date_formats_count;
+//}
+
 static s32
 wrap_index(s32 idx, s32 size){
     return(((idx % size) + size) % size);
@@ -1273,8 +1290,6 @@ draw_entire_ui(void){
         //###CSV LOADER###
         //##################
 
-        //ImGui::SeparatorText("CSV Loader");
-
         if(ImGui::Button("Load CSV##csv_profiles")){
             ImVec2 button_pos = ImGui::GetItemRectMin();
             ImVec2 button_size = ImGui::GetItemRectSize();
@@ -1286,16 +1301,15 @@ draw_entire_ui(void){
         }
         tooltip(str8_literal("Load CSV using a profile."));
 
-        //ImGui::SameLine();
-        if(pm->csv_profile_count > 0){
-            //todo(rr): isn't the memory contigououous?
-            CSV_Profile* profile = pm->csv_profiles->next;
-            for(s32 i=0; i < pm->csv_profile_idx; ++i){
-                profile = profile->next;
-            }
+        //if(pm->csv_profile_count > 0){
+        //    //todo(rr): isn't the memory contigououous?
+        //    CSV_Profile* profile = pm->csv_profiles->next;
+        //    for(s32 i=0; i < pm->csv_profile_idx; ++i){
+        //        profile = profile->next;
+        //    }
 
-            //ImGui::Text("(%s)", profile->name);
-        }
+        //    //ImGui::Text("(%s)", profile->name);
+        //}
 
         //ImGui::BeginChild("Child5", ImVec2(0, ImGui::GetContentRegionAvail().y * 0.45), true, 0);
         //ImGui::BeginChild("Child6", ImVec2(0, ImGui::GetContentRegionAvail().y * 0.85), true, 0);
@@ -1303,27 +1317,30 @@ draw_entire_ui(void){
 
         if(ImGui::BeginPopupModal("CSV Loader", 0, ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoMove)){
             ImVec2 box_image_size(17, 17);
-            f32 width = ImGui::CalcTextSize("Description Column").x + 15;
+            f32 width = ImGui::CalcTextSize("Description").x + 15;
             String8 unique_fmt;
 
-            CSV_Profile* profile;
+            //CSV_Profile* profile;
             if(pm->csv_profile_count == 0){
-                profile = (CSV_Profile*)pool_next(pm->csv_profile_pool);
+                CSV_Profile* profile = (CSV_Profile*)pool_next(pm->csv_profile_pool);
                 dll_push_back(pm->csv_profiles, profile);
                 pm->csv_profile_count++;
                 pm->csv_profile_idx = 0;
             }
 
             // go to profile at idx
-            profile = pm->csv_profiles->next;
+            CSV_Profile* profile = pm->csv_profiles->next;
             for(s32 i=0; i < pm->csv_profile_idx; ++i){
                 profile = profile->next;
             }
+            pm->csv_profile = profile;
+            //pm->selected_date_format = profile->date_format;
 
             String8 file_path = str8_cstring(pm->csv_path);
             test_csv_against_profile(file_path);
-            ImGui::SeparatorText("CSV Profile");
+            ImGui::SeparatorText("Profile");
             {
+                //ImGui::SetCursorPosX(width);
                 if(ImGui::Button("<##previous_profile")){
                     if(pm->csv_profile_idx > 0){
                         --pm->csv_profile_idx;
@@ -1366,22 +1383,24 @@ draw_entire_ui(void){
                     }
                 }
                 tooltip(str8_literal("Delete profile."));
-                ImGui::SameLine();
 
+
+                ImGui::SameLine();
                 ImGui::Text("Name");
                 ImGui::SameLine();
                 ImGui::PushItemWidth(100);
-                ImGui::SetCursorPosX(width);
+                //ImGui::SetCursorPosX(width);
                 unique_fmt = str8_fmt(tm->frame_arena, "##profile_name%i\n", pm->csv_profile_idx);
                 ImGui::InputText((char*)unique_fmt.data, profile->name, PROFILE_NAME_SIZE);
                 ImGui::PopItemWidth();
 
                 ImGui::SameLine();
                 ImGui::Text("(%i / %i)", pm->csv_profile_idx + 1, pm->csv_profile_count);
+                //custom_separator();
             }
-            custom_separator();
+            ImGui::SeparatorText("Headers");
 
-            ImGui::Text("Date Header");
+            ImGui::Text("Date");
             ImGui::SameLine();
             ImGui::SetCursorPosX(width);
             unique_fmt = str8_fmt(tm->frame_arena, "##profile_date_name%i\n", pm->csv_profile_idx);
@@ -1398,7 +1417,7 @@ draw_entire_ui(void){
                 ImGui::Text("Not Found");
             }
 
-            ImGui::Text("Amount Header");
+            ImGui::Text("Amount");
             ImGui::SameLine();
             ImGui::SetCursorPosX(width);
             unique_fmt = str8_fmt(tm->frame_arena, "##profile_amount_name%i\n", pm->csv_profile_idx);
@@ -1415,7 +1434,7 @@ draw_entire_ui(void){
                 ImGui::Text("Not Found");
             }
 
-            ImGui::Text("Description Header");
+            ImGui::Text("Description");
             ImGui::SameLine();
             ImGui::SetCursorPosX(width);
             unique_fmt = str8_fmt(tm->frame_arena, "##profile_description_name%i\n", pm->csv_profile_idx);
@@ -1432,8 +1451,42 @@ draw_entire_ui(void){
                 ImGui::Text("Not Found");
             }
 
+            ImGui::SeparatorText("Date Format");
+            ImGui::Text("Format");
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(width);
+            s32 item_current_idx = 0;
+            unique_fmt = str8_fmt(tm->frame_arena, "##date_format%i\n", pm->csv_profile_idx);
+            if(ImGui::BeginCombo((char*)unique_fmt.data, profile->date_format, ImGuiComboFlags_HeightLarge)){
+                for(s32 format_idx = 0; format_idx < array_count(date_formats); ++format_idx){
+                    bool is_selected = (item_current_idx == format_idx);
+                    String8 selection_item = date_formats[format_idx];
+
+                    if (ImGui::Selectable((char*)date_formats[format_idx].data, is_selected)){
+                        item_current_idx = format_idx;
+                        memcpy(profile->date_format, selection_item.str, selection_item.size + 1);
+                    }
+
+                    // Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
+                    if (is_selected)
+                        ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::SameLine();
+            //if(pm->date_format_found){
+            //    ImGui::Image(green_box_texture_id, box_image_size);
+            //    ImGui::SameLine();
+            //    ImGui::Text("Found");
+            //}
+            //else{
+            //    ImGui::Image(red_box_texture_id, box_image_size);
+            //    ImGui::SameLine();
+            //    ImGui::Text("Not Found");
+            //}
+
             custom_separator();
-            ImGui::Text("CSV File");
+            ImGui::Text("File");
             ImGui::SameLine();
             ImGui::SetCursorPosX(width);
             unique_fmt = str8_fmt(tm->frame_arena, "##profile_description_name%i\n", pm->csv_profile_idx);
@@ -1815,6 +1868,8 @@ draw_entire_ui(void){
                 }
                 ImGui::PushStyleColor(ImGuiCol_FrameBg, ImGui::GetColorU32(frame_bg_color));
 
+                // todo(rr): leave comments on this combo box explaing some things.
+                //           I don't remember why I did some of he things
                 // note: populate selection box with options
                 s32 color_idx = 0;
                 String8 combo_id = str8_formatted(scratch.arena, "##category_select%i", t_idx);
@@ -1833,7 +1888,7 @@ draw_entire_ui(void){
                                 draw_list->AddRectFilled(min, max, combo_popup_alternating_colors[color_idx % 2]);
                             }
                             else{
-                                s64 idx = byte_index_from_left(last_combo_name, ':');
+                                s64 idx = str8_index_from_left(last_combo_name, ':');
                                 String8Node* split_node1 = str8_split(tm->frame_arena, last_combo_name, ':');
                                 String8Node* split_node2 = str8_split(tm->frame_arena, selection_item, ':');
                                 if(!str8_compare(split_node1->next->str, split_node2->next->str)){
@@ -2246,7 +2301,6 @@ do_one_frame(void){
     }
     // todo(rr): maybe remove?
     if(controller_button_pressed(KeyCode_ESCAPE, true)){
-        //nocheckin
         should_quit = true;
 
     }
@@ -2315,6 +2369,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         pm->csv_profile_pool = push_pool(&pm->arena, sizeof(CSV_Profile), 32);
         // todo(rr): maybe I can just use scratch memory? I don't think I need this
         pm->data_arena       = push_arena(&pm->arena, MB(1));
+        //pm->date_formats_arena = push_arena(&pm->arena, sizeof(Date_Format) * 128);
 
         // setup free list from pools
         pool_free_all(pm->category_pool);
@@ -2333,6 +2388,8 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         dll_clear(pm->annual_categories);
         pm->csv_profiles = (CSV_Profile*)pool_next(pm->csv_profile_pool);
         dll_clear(pm->csv_profiles);
+
+        //setup_date_formats();
 
         // give selection list memory
         pm->selection_list = push_array(tm->options_arena, String8, 1024);

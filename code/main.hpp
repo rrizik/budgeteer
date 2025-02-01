@@ -154,11 +154,26 @@ typedef struct CSVColumnNode{
     char name[CSV_COLUMN_NAME_SIZE];
 } CSVColumnNode;
 
+#define DATE_FORMAT_SIZE 128
+typedef struct Date_Format{
+    Date_Format* next;
+    Date_Format* prev;
+    char name [DATE_FORMAT_SIZE];
+} Date_Format;
+
+static String8 date_formats[4] = {
+    str8_literal(""),
+    str8_literal("mm/dd/yyyy"),
+    str8_literal("dd/mm/yyyy"),
+    str8_literal("yyyy/mm/dd")
+};
+
 #define PROFILE_FILE_PATH_SIZE 1024
 #define PROFILE_NAME_SIZE 128
 #define PROFILE_DATE_SIZE 128
 #define PROFILE_AMOUNT_SIZE 128
 #define PROFILE_DESCRIPTION_SIZE 1024
+#define PROFILE_DATE_FORMAT_SIZE 128
 typedef struct CSV_Profile{
     CSV_Profile* next;
     CSV_Profile* prev;
@@ -167,6 +182,8 @@ typedef struct CSV_Profile{
     char date[PROFILE_DATE_SIZE];
     char amount[PROFILE_AMOUNT_SIZE];
     char description[PROFILE_DESCRIPTION_SIZE];
+    char date_format[PROFILE_DATE_FORMAT_SIZE];
+    //Date_Format* date_format;
 } CSV_Profile;
 
 #define CONFIG_NAMES_COUNT 32
@@ -179,6 +196,7 @@ typedef struct PermanentMemory{
     PoolArena* transaction_pool;
     PoolArena* csv_profile_pool;
     Arena* data_arena;
+    //Arena* date_formats_arena;
 
     // category/rows/months/transactions
     Category* annual_categories;
@@ -208,11 +226,18 @@ typedef struct PermanentMemory{
 
     // Profiles
     CSV_Profile* csv_profiles;
+    CSV_Profile* csv_profile;
     s32 csv_profile_count;
     s32 csv_profile_idx;
     bool date_header_found;
     bool amount_header_found;
     bool description_header_found;
+    bool date_format_found;
+
+    // Date Formats
+    s32 date_formats_count;
+    Date_Format* date_formats;
+    Date_Format* selected_date_format;
 
     // for setting tab flags
     u32 month_tab_flags[12];
@@ -508,6 +533,10 @@ global Rect window_restored_rect;
 global bool show_tooltips = true;
 global bool year_config_deserialized = false;
 
+static void test_date_format(String8 format){
+    print("%s\n", format.data);
+}
+
 static void
 test_csv_against_profile(String8 path){
     pm->date_header_found = false;
@@ -533,25 +562,54 @@ test_csv_against_profile(String8 path){
     String8 data = os_file_read(scratch.arena, file);
     String8* data_view = &data;
 
+    s32 date_idx = -1;
+    String8 line;
     String8 word;
-    String8 header = str8_eat_line(data_view);
-    while(header.size){
-        word = str8_eat_word_csv(&header);
-        str8_strip_quotes(&word);
+    bool header = true;
+    while(data_view->size){
+        line = str8_eat_line(data_view);
 
-        String8 str8_name;
-        str8_name = str8_cstring(profile->date);
-        if(str8_compare(str8_name, word)){
-            pm->date_header_found = true;
+        if(header){
+            s32 word_count = 0;
+            while(line.size){
+                word = str8_eat_word_csv(&line);
+                str8_strip_quotes(&word);
+
+                String8 str8_name;
+                str8_name = str8_cstring(profile->date);
+                if(str8_compare(str8_name, word)){
+                    pm->date_header_found = true;
+                    date_idx = word_count;
+                }
+                str8_name = str8_cstring(profile->amount);
+                if(str8_compare(str8_name, word)){
+                    pm->amount_header_found = true;
+                }
+                str8_name = str8_cstring(profile->description);
+                if(str8_compare(str8_name, word)){
+                    pm->description_header_found = true;
+                }
+                ++word_count;
+            }
+            header = false;
         }
-        str8_name = str8_cstring(profile->amount);
-        if(str8_compare(str8_name, word)){
-            pm->amount_header_found = true;
-        }
-        str8_name = str8_cstring(profile->description);
-        if(str8_compare(str8_name, word)){
-            pm->description_header_found = true;
-        }
+        //else{
+
+        //    s32 count = 0;
+        //    while(line.size){
+        //        word = str8_eat_word_csv(&line);
+        //        str8_strip_quotes(&word);
+
+        //        if(count == date_idx){
+        //            s32 idx = str8_index_from_left(word, ',');
+        //            String8 format = str8_split_left(word, idx);
+        //            //test_date_format(format);
+        //            continue;
+        //        }
+
+        //        ++count;
+        //    }
+        //}
     }
 
     os_file_close(file);
@@ -789,6 +847,15 @@ deserialize_config(void){
                         copy_str8_to_char(profile->description, str8_node->prev->str, PROFILE_DESCRIPTION_SIZE);
                     }
                 }
+                else if(str8_contains(word, str8_literal("format"))){
+                    str8_node = str8_split(scratch.arena, word, '=');
+                    if(str8_compare(str8_node->prev->str, str8_node->next->str)){
+                        copy_str8_to_char(profile->date_format, str8_literal("\0"), PROFILE_DATE_FORMAT_SIZE);
+                    }
+                    else{
+                        copy_str8_to_char(profile->date_format, str8_node->prev->str, PROFILE_DATE_FORMAT_SIZE);
+                    }
+                }
             }
             cps = ConfigParsingState_None;
         }
@@ -923,8 +990,8 @@ serialize_config(void){
         profile = profile->next;
         arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#csv_profile%i\n", i);
         arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
-                "name=%s\x1B date=%s\x1B amount=%s\x1B description=%s\x1B\n",
-                profile->name, profile->date, profile->amount, profile->description);
+                "name=%s\x1B date=%s\x1B amount=%s\x1B description=%s\x1B format=%s\n",
+                profile->name, profile->date, profile->amount, profile->description, profile->date_format);
     }
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#profile_settings\n");
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "csv_profile_idx=%i\n", pm->csv_profile_idx);
