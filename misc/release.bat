@@ -27,25 +27,10 @@ IF EXIST budgeteer (
 )
 mkdir budgeteer
 
-::if exist budgeteer.zip del budgeteer.zip
-::if exist budgeteer.exe del budgeteer.exe
-::if exist config.confg del config.confg
-::if exist README.md del README.md
-::if exist assets del /Q assets
-
-:: copy over save dir and create empty budget file
-::rmdir /S /Q .\saves
-::mkdir .\saves
-::echo. > .\saves\budget.b
-
 :: copy over exe, config, and md files
 echo - Copying over files
 copy /Y ..\build\budgeteer.exe .\budgeteer
-copy /Y ..\build\config.conf .\budgeteer
 copy /Y ..\README.md .\budgeteer
-
-:: copy over assets
-xcopy /S /Q /Y "..\build\assets" .\budgeteer\assets\
 
 :: Delete the existing zip file if it exists
 ::if exist budgeteer.zip del budgeteer.zip

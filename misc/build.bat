@@ -11,7 +11,7 @@ if !DEBUG! == 1 (
 )
 
 set cl_includes=-I ..\..\base\code
-set cl_flags=/Zi /nologo -std:c++latest /Wall /WX 
+set cl_flags=/Zi /nologo -std:c++latest /Wall /WX /diagnostics:caret /diagnostics:color
 set cl_imgui_flags=/Zi /nologo -std:c++latest
 set cl_ignore_warnings=-wd4201 -wd4189 -wd4101 -wd4505 -wd4820 -wd5045 -wd4996 -wd4100 -wd4668 -wd4711 -wd4062 -wd4388 -wd4018 -wd4459 -wd4626  
 rem C4201: nonstandard extension used: nameless struct/union
@@ -33,6 +33,11 @@ rem C4626: remove and understand (something to do with defer)
 
 IF NOT EXIST ..\build mkdir ..\build
 pushd ..\build
+cl /EHsc %cl_optimization% %cl_imgui_flags% %cl_includes% ..\code\meta.cpp 
+if %ERRORLEVEL% == 0 (
+    meta.exe
+)
+
 cl /EHsc %cl_optimization% %cl_imgui_flags% %cl_includes% ..\code\main.cpp ..\code\imgui\imgui*.cpp ..\code\tinyfiledialogs\tinyfiledialogs.cpp /Febudgeteer.exe
 popd
 

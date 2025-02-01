@@ -120,8 +120,6 @@ typedef struct Vertex2{
 } Vertex2;
 
 static RGBA CLEAR =   {1.0f, 1.0f, 1.0f,  0.0f};
-static RGBA RED =     {1.0f, 0.0f, 0.0f,  1.0f};
-static RGBA GREEN =   {0.0f, 1.0f, 0.0f,  1.0f};
 static RGBA BLUE =    {0.0f, 0.0f, 1.0f,  1.0f};
 static RGBA MAGENTA = {1.0f, 0.0f, 1.0f,  1.0f};
 static RGBA TEAL =    {0.0f, 1.0f, 1.0f,  1.0f};

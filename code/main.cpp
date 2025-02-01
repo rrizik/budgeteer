@@ -1,27 +1,5 @@
 #include "main.hpp"
 
-//static void
-//setup_date_formats(){
-//    pm->date_formats = push_struct(pm->date_formats_arena, Date_Format);
-//    dll_clear(pm->date_formats);
-//
-//    Date_Format* format;
-//    format = push_struct(pm->date_formats_arena, Date_Format);
-//    memcpy(format->name, "mm/dd/yyy", 10);
-//    ++pm->date_formats_count;
-//    format = push_struct(pm->date_formats_arena, Date_Format);
-//    memcpy(format->name, "dd/mm/yyy", 10);
-//    ++pm->date_formats_count;
-//    format = push_struct(pm->date_formats_arena, Date_Format);
-//    memcpy(format->name, "yyy/mm/dd", 10);
-//    ++pm->date_formats_count;
-//}
-
-static s32
-wrap_index(s32 idx, s32 size){
-    return(((idx % size) + size) % size);
-}
-
 static void
 initialize_years_and_transactions(void){
     time_t t = time(0);
@@ -32,6 +10,7 @@ initialize_years_and_transactions(void){
         pm->year_idx = 0;
     }
 
+    // setup year numbers
     for(s32 idx=0; idx < MAX_YEAR_COUNT/2; ++idx){
         Year* year = pm->years + idx;
         year->number = pm->current_year + idx;
@@ -40,7 +19,6 @@ initialize_years_and_transactions(void){
         Year* year = pm->years + idx;
         year->number = pm->current_year - (MAX_YEAR_COUNT - idx);
     }
-
 
     for(s32 idx=0; idx < MAX_YEAR_COUNT; ++idx){
         Year* year = pm->years + idx;
@@ -449,8 +427,8 @@ draw_entire_ui(void){
         //    pm->budget[0] = '0';
         //    pm->budget[1] = '\0';
         //}
-        ImGui::InputText("##Budget", (char*)pm->budget.str, 128, ImGuiInputTextFlags_CharsDecimal |
-                                                                 ImGuiInputTextFlags_AutoSelectAll);
+        ImGui::InputText("##Budget", pm->budget, 128, ImGuiInputTextFlags_CharsDecimal |
+                                                      ImGuiInputTextFlags_AutoSelectAll);
         ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
         // TOTALS
@@ -701,16 +679,20 @@ draw_entire_ui(void){
 
         //#####MONTH PLAN######
         ImGui::BeginChild("Child3", ImVec2(0, 0), true, ImGuiWindowFlags_AlwaysVerticalScrollbar|ImGuiWindowFlags_AlwaysHorizontalScrollbar);
+        ImGui::PushFont(my_font12);
         if(pm->draw_month_plan){
-            if(ImGui::Button("V")){
+            fmt = str8_fmt(tm->frame_arena, "%c##draw_month", icon_lookup[Icon_Collapse]);
+            if(ImGui::Button((char*)fmt.str)){
                 pm->draw_month_plan = false;
             }
         }
         else{
-            if(ImGui::Button(">")){
+            fmt = str8_fmt(tm->frame_arena, "%c##draw_month", icon_lookup[Icon_Expand]);
+            if(ImGui::Button((char*)fmt.str)){
                 pm->draw_month_plan = true;
             }
         }
+        ImGui::PopFont();
         tooltip(str8_literal("Collapse/Expand Month Plan."));
 
         ImGui::SameLine();
@@ -734,12 +716,17 @@ draw_entire_ui(void){
             ImGui::SameLine();
             ImGui::SetCursorPosX(plus_column_start);
             if(ImGui::Button("+##add_category_button")){
-                Category* category = (Category*)pool_next(pm->category_pool);
-                dll_push_back(pm->month_categories, category);
-                category->rows = (Row*)pool_next(pm->row_pool);
-                dll_clear(category->rows);
+                if(pm->categories_count < MAX_CATEGORY_COUNT){
+                    Category* category = (Category*)pool_next(pm->category_pool);
+                    dll_push_back(pm->month_categories, category);
+                    category->rows = (Row*)pool_next(pm->row_pool);
+                    dll_clear(category->rows);
 
-                pm->categories_count++;
+                    pm->categories_count++;
+                }
+                else{
+                    // todo(rr): STATUSBAR ERROR
+                }
             }
             tooltip(str8_literal("Add New Category."));
 
@@ -766,18 +753,23 @@ draw_entire_ui(void){
 
                 ImGui::SetCursorPosX(collapse_column_start);
                 ImGui::PushID(c_idx);
+                ImGui::PushFont(my_font12);
                 if(category->draw_rows){
-                    if(ImGui::Button("V")){
+                    fmt = str8_fmt(tm->frame_arena, "%c##", icon_lookup[Icon_Collapse]);
+                    if(ImGui::Button((char*)fmt.str)){
                         category->draw_rows = false;
                     }
                 }
                 else{
-                    if(ImGui::Button(">")){
+                    fmt = str8_fmt(tm->frame_arena, "%c##", icon_lookup[Icon_Expand]);
+                    if(ImGui::Button((char*)fmt.str)){
                         if(category->row_count){
                             category->draw_rows = true;
                         }
                     }
                 }
+                ImGui::PopFont();
+
                 tooltip(str8_literal("Collapse/Expand Or Drag/Swap Category."));
                 ImGui::PopID();
 
@@ -845,12 +837,17 @@ draw_entire_ui(void){
                 ImGui::SetCursorPosX(plus_column_start);
                 ImGui::PushID(c_idx);
                 if(ImGui::Button("+##add_row_button")){
-                    Row* r = (Row*)pool_next(pm->row_pool);
-                    dll_push_back(category->rows, r);
+                    if(pm->total_rows_count < MAX_ROW_COUNT){
+                        Row* r = (Row*)pool_next(pm->row_pool);
+                        dll_push_back(category->rows, r);
 
-                    category->draw_rows = true;
-                    category->row_count++;
-                    //pm->total_rows_count++;
+                        category->draw_rows = true;
+                        category->row_count++;
+                        pm->total_rows_count++;
+                    }
+                    else{
+                        // todo(rr): STATUSBAR ERROR
+                    }
                 }
                 tooltip(str8_literal("Add New Sub-Category."));
                 ImGui::PopID();
@@ -859,7 +856,7 @@ draw_entire_ui(void){
                 ImGui::SetCursorPosX(x_column_start);
                 ImGui::PushID(c_idx);
                 if(ImGui::Button("x##remove_category")){
-                    //pm->total_rows_count -= category->row_count;
+                    pm->total_rows_count -= category->row_count;
                     --pm->categories_count;
 
                     dll_remove(category);
@@ -977,7 +974,7 @@ draw_entire_ui(void){
                         ImGui::SetCursorPosX(x_column_start);
                         ImGui::PushID(uid);
                         if(ImGui::Button("x##remove_row")){
-                            //--pm->total_rows_count;
+                            --pm->total_rows_count;
                             --category->row_count;
 
                             dll_remove(row);
@@ -1009,16 +1006,20 @@ draw_entire_ui(void){
         }
         custom_separator();
 
+        ImGui::PushFont(my_font12);
         if(pm->draw_quarter_plan){
-            if(ImGui::Button("V##draw_quarter")){
+            fmt = str8_fmt(tm->frame_arena, "%c##draw_quarter", icon_lookup[Icon_Collapse]);
+            if(ImGui::Button((char*)fmt.str)){
                 pm->draw_quarter_plan = false;
             }
         }
         else{
-            if(ImGui::Button(">##draw_quarter")){
+            fmt = str8_fmt(tm->frame_arena, "%c##draw_quarter", icon_lookup[Icon_Expand]);
+            if(ImGui::Button((char*)fmt.str)){
                 pm->draw_quarter_plan = true;
             }
         }
+        ImGui::PopFont();
         tooltip(str8_literal("Collapse/Expand Quarter Plan."));
         ImGui::SameLine();
         ImGui::SeparatorText("Quarter Plan");
@@ -1041,27 +1042,31 @@ draw_entire_ui(void){
             ImGui::SameLine();
             ImGui::SetCursorPosX(plus_column_start);
             if(ImGui::Button("+##add_quarter_category_button")){
-                Category* category = (Category*)pool_next(pm->category_pool);
-                dll_push_back(pm->quarter_categories, category);
-                category->rows = (Row*)pool_next(pm->row_pool);
-                dll_clear(category->rows);
+                //Category* category = (Category*)pool_next(pm->category_pool);
+                //dll_push_back(pm->quarter_categories, category);
+                //category->rows = (Row*)pool_next(pm->row_pool);
+                //dll_clear(category->rows);
 
-                pm->quarter_categories_count++;
+                //pm->quarter_categories_count++;
             }
             tooltip(str8_literal("Add New Category."));
         }
         custom_separator();
 
+        ImGui::PushFont(my_font12);
         if(pm->draw_biannual_plan){
-            if(ImGui::Button("V##draw_biannual")){
+            fmt = str8_fmt(tm->frame_arena, "%c##draw_biannual", icon_lookup[Icon_Collapse]);
+            if(ImGui::Button((char*)fmt.str)){
                 pm->draw_biannual_plan = false;
             }
         }
         else{
-            if(ImGui::Button(">##draw_biannual")){
+            fmt = str8_fmt(tm->frame_arena, "%c##draw_biannual", icon_lookup[Icon_Expand]);
+            if(ImGui::Button((char*)fmt.str)){
                 pm->draw_biannual_plan = true;
             }
         }
+        ImGui::PopFont();
         tooltip(str8_literal("Collapse/Expand Bi-Annual Plan."));
         ImGui::SameLine();
         ImGui::SeparatorText("BiAnnual Plan");
@@ -1084,27 +1089,31 @@ draw_entire_ui(void){
             ImGui::SameLine();
             ImGui::SetCursorPosX(plus_column_start);
             if(ImGui::Button("+##add_biannual_category_button")){
-                Category* category = (Category*)pool_next(pm->category_pool);
-                dll_push_back(pm->biannual_categories, category);
-                category->rows = (Row*)pool_next(pm->row_pool);
-                dll_clear(category->rows);
+                //Category* category = (Category*)pool_next(pm->category_pool);
+                //dll_push_back(pm->biannual_categories, category);
+                //category->rows = (Row*)pool_next(pm->row_pool);
+                //dll_clear(category->rows);
 
-                pm->biannual_categories_count++;
+                //pm->biannual_categories_count++;
             }
             tooltip(str8_literal("Add New Category."));
         }
         custom_separator();
 
+        ImGui::PushFont(my_font12);
         if(pm->draw_annual_plan){
-            if(ImGui::Button("V##draw_annual")){
+            fmt = str8_fmt(tm->frame_arena, "%c##annual_plan", icon_lookup[Icon_Collapse]);
+            if(ImGui::Button((char*)fmt.str)){
                 pm->draw_annual_plan = false;
             }
         }
         else{
-            if(ImGui::Button(">##draw_annual")){
+            fmt = str8_fmt(tm->frame_arena, "%c##annual_plan", icon_lookup[Icon_Expand]);
+            if(ImGui::Button((char*)fmt.str)){
                 pm->draw_annual_plan = true;
             }
         }
+        ImGui::PopFont();
         tooltip(str8_literal("Collapse/Expand Annual Plan."));
         ImGui::SameLine();
         ImGui::SeparatorText("Annual Plan");
@@ -1127,12 +1136,12 @@ draw_entire_ui(void){
             ImGui::SameLine();
             ImGui::SetCursorPosX(plus_column_start);
             if(ImGui::Button("+##add_annual_category_button")){
-                Category* category = (Category*)pool_next(pm->category_pool);
-                dll_push_back(pm->annual_categories, category);
-                category->rows = (Row*)pool_next(pm->row_pool);
-                dll_clear(category->rows);
+                //Category* category = (Category*)pool_next(pm->category_pool);
+                //dll_push_back(pm->annual_categories, category);
+                //category->rows = (Row*)pool_next(pm->row_pool);
+                //dll_clear(category->rows);
 
-                pm->annual_categories_count++;
+                //pm->annual_categories_count++;
             }
             tooltip(str8_literal("Add New Category."));
 
@@ -1301,16 +1310,6 @@ draw_entire_ui(void){
         }
         tooltip(str8_literal("Load CSV using a profile."));
 
-        //if(pm->csv_profile_count > 0){
-        //    //todo(rr): isn't the memory contigououous?
-        //    CSV_Profile* profile = pm->csv_profiles->next;
-        //    for(s32 i=0; i < pm->csv_profile_idx; ++i){
-        //        profile = profile->next;
-        //    }
-
-        //    //ImGui::Text("(%s)", profile->name);
-        //}
-
         //ImGui::BeginChild("Child5", ImVec2(0, ImGui::GetContentRegionAvail().y * 0.45), true, 0);
         //ImGui::BeginChild("Child6", ImVec2(0, ImGui::GetContentRegionAvail().y * 0.85), true, 0);
         //ImGui::BeginChild("Child7", ImVec2(0, 0), true, ImGuiWindowFlags_NoScrollbar);
@@ -1322,10 +1321,15 @@ draw_entire_ui(void){
 
             //CSV_Profile* profile;
             if(pm->csv_profile_count == 0){
-                CSV_Profile* profile = (CSV_Profile*)pool_next(pm->csv_profile_pool);
-                dll_push_back(pm->csv_profiles, profile);
-                pm->csv_profile_count++;
-                pm->csv_profile_idx = 0;
+                if(pm->csv_profile_count < MAX_PROFILE_COUNT){
+                    CSV_Profile* profile = (CSV_Profile*)pool_next(pm->csv_profile_pool);
+                    dll_push_back(pm->csv_profiles, profile);
+                    pm->csv_profile_count++;
+                    pm->csv_profile_idx = 0;
+                }
+                else{
+                    // todo(rr): STATUSBAR ERROR
+                }
             }
 
             // go to profile at idx
@@ -1334,34 +1338,40 @@ draw_entire_ui(void){
                 profile = profile->next;
             }
             pm->csv_profile = profile;
-            //pm->selected_date_format = profile->date_format;
 
-            String8 file_path = str8_cstring(pm->csv_path);
-            test_csv_against_profile(file_path);
+            String8 csv_path = str8_cstring(pm->csv_path);
+            test_csv_against_profile(csv_path);
+
             ImGui::SeparatorText("Profile");
             {
-                //ImGui::SetCursorPosX(width);
-                if(ImGui::Button("<##previous_profile")){
-                    if(pm->csv_profile_idx > 0){
-                        --pm->csv_profile_idx;
-                    }
+                ImGui::PushFont(my_font12);
+                fmt = str8_fmt(tm->frame_arena, "%c##previous_profile", icon_lookup[Icon_LeftArrow]);
+                if(ImGui::Button((char*)fmt.str)){
+                    pm->csv_profile_idx = wrap_index(pm->csv_profile_idx - 1, pm->csv_profile_count);
                 }
+                ImGui::PopFont();
                 tooltip(str8_literal("Go to previous profile."));
 
                 ImGui::SameLine();
-                if(ImGui::Button(">##next_profile")){
-                    if(pm->csv_profile_idx < pm->csv_profile_count - 1){
-                        ++pm->csv_profile_idx;
-                    }
+                ImGui::PushFont(my_font12);
+                fmt = str8_fmt(tm->frame_arena, "%c##next_profile", icon_lookup[Icon_RightArrow]);
+                if(ImGui::Button((char*)fmt.str)){
+                    pm->csv_profile_idx = wrap_index(pm->csv_profile_idx + 1, pm->csv_profile_count);
                 }
+                ImGui::PopFont();
                 tooltip(str8_literal("Go to next profile."));
 
                 ImGui::SameLine();
                 if(ImGui::Button("+##add_profile")){
-                    profile = (CSV_Profile*)pool_next(pm->csv_profile_pool);
-                    dll_push_back(pm->csv_profiles, profile);
-                    ++pm->csv_profile_count;
-                    pm->csv_profile_idx = pm->csv_profile_count - 1;
+                    if(pm->csv_profile_count < MAX_PROFILE_COUNT){
+                        profile = (CSV_Profile*)pool_next(pm->csv_profile_pool);
+                        dll_push_back(pm->csv_profiles, profile);
+                        ++pm->csv_profile_count;
+                        pm->csv_profile_idx = pm->csv_profile_count - 1;
+                    }
+                    else{
+                        // todo(rr): STATUSBAR ERROR
+                    }
                 }
                 tooltip(str8_literal("Add new profile."));
 
@@ -1389,14 +1399,12 @@ draw_entire_ui(void){
                 ImGui::Text("Name");
                 ImGui::SameLine();
                 ImGui::PushItemWidth(100);
-                //ImGui::SetCursorPosX(width);
                 unique_fmt = str8_fmt(tm->frame_arena, "##profile_name%i\n", pm->csv_profile_idx);
                 ImGui::InputText((char*)unique_fmt.data, profile->name, PROFILE_NAME_SIZE);
                 ImGui::PopItemWidth();
 
                 ImGui::SameLine();
                 ImGui::Text("(%i / %i)", pm->csv_profile_idx + 1, pm->csv_profile_count);
-                //custom_separator();
             }
             ImGui::SeparatorText("Headers");
 
@@ -1404,56 +1412,40 @@ draw_entire_ui(void){
             ImGui::SameLine();
             ImGui::SetCursorPosX(width);
             unique_fmt = str8_fmt(tm->frame_arena, "##profile_date_name%i\n", pm->csv_profile_idx);
+
             ImGui::InputText((char*)unique_fmt.data, profile->date, PROFILE_DATE_SIZE);
+
             ImGui::SameLine();
             if(pm->date_header_found){
-                ImGui::Image(green_box_texture_id, box_image_size);
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(GREEN.r, GREEN.g, GREEN.b, 255));
+                ImGui::PushFont(my_font20);
+                f32 currentY = ImGui::GetCursorPosY();
+                ImGui::SetCursorPosY(currentY - 3.0f);
+                ImGui::Text("%c", icon_lookup[Icon_Square]);
+                ImGui::SetCursorPosY(currentY);
+                ImGui::PopFont();
+                ImGui::PopStyleColor(); // Restore default color
                 ImGui::SameLine();
                 ImGui::Text("Found");
             }
             else{
-                ImGui::Image(red_box_texture_id, box_image_size);
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(RED.r, RED.g, RED.b, 255));
+                ImGui::PushFont(my_font20);
+                f32 currentY = ImGui::GetCursorPosY();
+                ImGui::SetCursorPosY(currentY - 3.0f);
+                ImGui::Text("%c", icon_lookup[Icon_Square]);
+                ImGui::SetCursorPosY(currentY);
+                ImGui::PopFont();
+                ImGui::PopStyleColor(); // Restore default color
                 ImGui::SameLine();
                 ImGui::Text("Not Found");
-            }
 
-            ImGui::Text("Amount");
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(width);
-            unique_fmt = str8_fmt(tm->frame_arena, "##profile_amount_name%i\n", pm->csv_profile_idx);
-            ImGui::InputText((char*)unique_fmt.data, profile->amount, PROFILE_AMOUNT_SIZE);
-            ImGui::SameLine();
-            if(pm->amount_header_found){
-                ImGui::Image(green_box_texture_id, box_image_size);
-                ImGui::SameLine();
-                ImGui::Text("Found");
             }
-            else{
-                ImGui::Image(red_box_texture_id, box_image_size);
-                ImGui::SameLine();
-                ImGui::Text("Not Found");
+            if (!pm->date_header_found) {
+                ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.3f); // Reduce transparency
+                ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.2f, 0.2f, 0.2f, 1.0f)); // Darker background
             }
-
-            ImGui::Text("Description");
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(width);
-            unique_fmt = str8_fmt(tm->frame_arena, "##profile_description_name%i\n", pm->csv_profile_idx);
-            ImGui::InputText((char*)unique_fmt.data, profile->description, PROFILE_DESCRIPTION_SIZE);
-            ImGui::SameLine();
-            if(pm->description_header_found){
-                ImGui::Image(green_box_texture_id, box_image_size);
-                ImGui::SameLine();
-                ImGui::Text("Found");
-            }
-            else{
-                ImGui::Image(red_box_texture_id, box_image_size);
-                ImGui::SameLine();
-                ImGui::Text("Not Found");
-            }
-
-            ImGui::SeparatorText("Date Format");
-            ImGui::Text("Format");
-            ImGui::SameLine();
+            ImGui::BeginDisabled(!pm->date_header_found);
             ImGui::SetCursorPosX(width);
             s32 item_current_idx = 0;
             unique_fmt = str8_fmt(tm->frame_arena, "##date_format%i\n", pm->csv_profile_idx);
@@ -1464,7 +1456,9 @@ draw_entire_ui(void){
 
                     if (ImGui::Selectable((char*)date_formats[format_idx].data, is_selected)){
                         item_current_idx = format_idx;
+                        profile->date_format_idx = format_idx;
                         memcpy(profile->date_format, selection_item.str, selection_item.size + 1);
+                        pm->new_file_or_format = true;
                     }
 
                     // Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
@@ -1474,35 +1468,122 @@ draw_entire_ui(void){
                 ImGui::EndCombo();
             }
             ImGui::SameLine();
-            //if(pm->date_format_found){
-            //    ImGui::Image(green_box_texture_id, box_image_size);
-            //    ImGui::SameLine();
-            //    ImGui::Text("Found");
-            //}
-            //else{
-            //    ImGui::Image(red_box_texture_id, box_image_size);
-            //    ImGui::SameLine();
-            //    ImGui::Text("Not Found");
-            //}
+            if(pm->date_format_found){
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(GREEN.r, GREEN.g, GREEN.b, 255));
+                ImGui::PushFont(my_font20);
+                f32 currentY = ImGui::GetCursorPosY();
+                ImGui::SetCursorPosY(currentY - 3.0f);
+                ImGui::Text("%c", icon_lookup[Icon_Square]);
+                ImGui::SetCursorPosY(currentY);
+                ImGui::PopFont();
+                ImGui::PopStyleColor(); // Restore default color
+                ImGui::SameLine();
+                ImGui::Text("Found");
+            }
+            else{
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(RED.r, RED.g, RED.b, 255));
+                ImGui::PushFont(my_font20);
+                f32 currentY = ImGui::GetCursorPosY();
+                ImGui::SetCursorPosY(currentY - 3.0f);
+                ImGui::Text("%c", icon_lookup[Icon_Square]);
+                ImGui::SetCursorPosY(currentY);
+                ImGui::PopFont();
+                ImGui::PopStyleColor();
+                ImGui::SameLine();
+                ImGui::Text("Not Found");
+            }
+            ImGui::EndDisabled();
+            if (!pm->date_header_found) {
+                ImGui::PopStyleColor(); // Restore original background
+                ImGui::PopStyleVar();   // Restore original alpha
+            }
+            custom_separator();
+
+            ImGui::Text("Amount");
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(width);
+            unique_fmt = str8_fmt(tm->frame_arena, "##profile_amount_name%i\n", pm->csv_profile_idx);
+            ImGui::InputText((char*)unique_fmt.data, profile->amount, PROFILE_AMOUNT_SIZE);
+            ImGui::SameLine();
+            if(pm->amount_header_found){
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(GREEN.r, GREEN.g, GREEN.b, 255));
+                ImGui::PushFont(my_font20);
+                f32 currentY = ImGui::GetCursorPosY();
+                ImGui::SetCursorPosY(currentY - 3.0f);
+                ImGui::Text("%c", icon_lookup[Icon_Square]);
+                ImGui::SetCursorPosY(currentY);
+                ImGui::PopFont();
+                ImGui::PopStyleColor(); // Restore default color
+                ImGui::SameLine();
+                ImGui::Text("Found");
+            }
+            else{
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(RED.r, RED.g, RED.b, 255));
+                ImGui::PushFont(my_font20);
+                f32 currentY = ImGui::GetCursorPosY();
+                ImGui::SetCursorPosY(currentY - 3.0f);
+                ImGui::Text("%c", icon_lookup[Icon_Square]);
+                ImGui::SetCursorPosY(currentY);
+                ImGui::PopFont();
+                ImGui::PopStyleColor();
+                ImGui::SameLine();
+                ImGui::Text("Not Found");
+            }
+            custom_separator();
+
+            ImGui::Text("Description");
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(width);
+            unique_fmt = str8_fmt(tm->frame_arena, "##profile_description_name%i\n", pm->csv_profile_idx);
+            ImGui::InputText((char*)unique_fmt.data, profile->description, PROFILE_DESCRIPTION_SIZE);
+            ImGui::SameLine();
+            if(pm->description_header_found){
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(GREEN.r, GREEN.g, GREEN.b, 255));
+                ImGui::PushFont(my_font20);
+                f32 currentY = ImGui::GetCursorPosY();
+                ImGui::SetCursorPosY(currentY - 3.0f);
+                ImGui::Text("%c", icon_lookup[Icon_Square]);
+                ImGui::SetCursorPosY(currentY);
+                ImGui::PopFont();
+                ImGui::PopStyleColor(); // Restore default color
+                ImGui::SameLine();
+                ImGui::Text("Found");
+            }
+            else{
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(RED.r, RED.g, RED.b, 255));
+                ImGui::PushFont(my_font20);
+                f32 currentY = ImGui::GetCursorPosY();
+                ImGui::SetCursorPosY(currentY - 3.0f);
+                ImGui::Text("%c", icon_lookup[Icon_Square]);
+                ImGui::SetCursorPosY(currentY);
+                ImGui::PopFont();
+                ImGui::PopStyleColor();
+                ImGui::SameLine();
+                ImGui::Text("Not Found");
+            }
+
+            //ImGui::SeparatorText("Date Format");
 
             custom_separator();
             ImGui::Text("File");
             ImGui::SameLine();
             ImGui::SetCursorPosX(width);
-            unique_fmt = str8_fmt(tm->frame_arena, "##profile_description_name%i\n", pm->csv_profile_idx);
-            ImGui::InputText("##csv_path", pm->csv_path, PROFILE_DESCRIPTION_SIZE);
-            ImGui::SameLine();
             if(ImGui::Button("...##grab_csv_file")){
                 char* file = tinyfd_openFileDialog("Open CSV File", (char*)pm->default_path.str, 0, 0, 0, 0);
                 if(file){
                     s32 len = char_length(file);
                     memset(pm->csv_path, 0, 4096);
                     memcpy(pm->csv_path, file, len);
+                    pm->new_file_or_format = true;
                 }
             }
-            tooltip(str8_literal("Load CSV From File."));
+            tooltip(str8_literal("Select CSV file from disk."));
             ImGui::SameLine();
-            if(ImGui::Button("x##grab_csv_file")){
+            ImGui::PushItemWidth(417);
+            unique_fmt = str8_fmt(tm->frame_arena, "##profile_description_name%i\n", pm->csv_profile_idx);
+            ImGui::InputText("##csv_path", pm->csv_path, PROFILE_DESCRIPTION_SIZE, ImGuiInputTextFlags_ReadOnly);
+            ImGui::SameLine();
+            if(ImGui::Button("x##delete_csv_path")){
                 memset(pm->csv_path, 0, 4096);
             }
             tooltip(str8_literal("Delete path."));
@@ -1512,7 +1593,7 @@ draw_entire_ui(void){
                 ImGui::CloseCurrentPopup();
             }
             if(ImGui::Button("Load")){
-                deserialize_csv(file_path);
+                deserialize_csv(csv_path);
                 ImGui::CloseCurrentPopup();
             }
             tooltip(str8_literal("loading CSV."));
@@ -1530,37 +1611,132 @@ draw_entire_ui(void){
         //##################
 
         ImGui::SeparatorText("Transactions");
-        if(ImGui::Button("<<##prev_prev_year")){
+        ImGui::PushFont(my_font12);
+        fmt = str8_fmt(tm->frame_arena, "%c##prev_prev_year", icon_lookup[Icon_DoubleLeftArrow]);
+        if(ImGui::Button((char*)fmt.str)){
             pm->year_idx -= 5;
             pm->year = pm->years + wrap_index(pm->year_idx, MAX_YEAR_COUNT);
         }
+        ImGui::PopFont();
         tooltip(str8_literal("Go To Previous 5 Years"));
         ImGui::SameLine();
-        if(ImGui::Button("<##prev_year")){
+        ImGui::PushFont(my_font12);
+        fmt = str8_fmt(tm->frame_arena, "%c##prev_year", icon_lookup[Icon_LeftArrow]);
+        if(ImGui::Button((char*)fmt.str)){
             --pm->year_idx;
             pm->year = pm->years + wrap_index(pm->year_idx, MAX_YEAR_COUNT);
         }
+        ImGui::PopFont();
         tooltip(str8_literal("Go To Previous Year"));
         ImGui::SameLine();
         ImGui::Text("Year %04d", year->number);
         ImGui::SameLine();
-        if(ImGui::Button(">##next_year")){
+        ImGui::PushFont(my_font12);
+        fmt = str8_fmt(tm->frame_arena, "%c##next_year", icon_lookup[Icon_RightArrow]);
+        if(ImGui::Button((char*)fmt.str)){
             ++pm->year_idx;
             pm->year = pm->years + wrap_index(pm->year_idx, MAX_YEAR_COUNT);
         }
+        ImGui::PopFont();
         tooltip(str8_literal("Go To Next Year"));
         ImGui::SameLine();
-        if(ImGui::Button(">>##next_next_year")){
+        ImGui::PushFont(my_font12);
+        fmt = str8_fmt(tm->frame_arena, "%c##next_next_year", icon_lookup[Icon_DoubleRightArrow]);
+        if(ImGui::Button((char*)fmt.str)){
             pm->year_idx += 5;
             pm->year = pm->years + wrap_index(pm->year_idx, MAX_YEAR_COUNT);
         }
+        ImGui::PopFont();
         tooltip(str8_literal("Go To Next 5 Years"));
         ImGui::SameLine();
-        if(ImGui::Button("^##current_year")){
+        ImGui::PushFont(my_font12);
+        fmt = str8_fmt(tm->frame_arena, "%c##current_year", icon_lookup[Icon_UpArrow]);
+        if(ImGui::Button((char*)fmt.str)){
             pm->year_idx = 0;
             pm->year = pm->years + wrap_index(pm->year_idx, MAX_YEAR_COUNT);
         }
+        ImGui::PopFont();
         tooltip(str8_literal("Go To Current Year"));
+        ImGui::SameLine();
+        if(ImGui::Button("x##delete_current_year")){
+            ImGui::OpenPopup("delete current year transactions");
+            ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+            ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        }
+        if(ImGui::BeginPopupModal("delete current year transactions", 0,
+                                  ImGuiWindowFlags_AlwaysAutoResize|
+                                  ImGuiWindowFlags_NoMove)){
+            ImGui::Text("Are you sure you want to delete all\ntransactions for the selected year?");
+            if(ImGui::Button("Confirm##confirm_delete_current_year")){
+                for(s32 i=0; i<Month_Count; ++i){
+                    MonthInfo* month = year->months + i;
+                    Transaction* t = month->transactions;
+                    for(s32 t_idx=0; t_idx < month->transaction_count; ++t_idx){
+                        t = t->next;
+                        dll_remove(t);
+                        pool_free(pm->transaction_pool, t);
+                        t = month->transactions;
+                    }
+                    dll_clear(month->transactions);
+                    month->transaction_count = 0;
+                }
+                pm->transaction_count -= year->transaction_count;
+                year->transaction_count = 0;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 58);
+            if(ImGui::Button("Cancel##cancel_delete_current_year")){
+                ImGui::CloseCurrentPopup();
+            }
+            if(controller_button_pressed(KeyCode_ESCAPE, true)){
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+        tooltip(str8_literal("Delete all transactions for the selected year"));
+
+        ImGui::SameLine();
+        if(ImGui::Button("xx##delete_all_years")){
+            ImGui::OpenPopup("delete all transactions");
+            ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+            ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        }
+        if(ImGui::BeginPopupModal("delete all transactions", 0,
+                                  ImGuiWindowFlags_AlwaysAutoResize|
+                                  ImGuiWindowFlags_NoMove)){
+            ImGui::Text("Are you sure you want to delete all\ntransactions for all years?");
+            if(ImGui::Button("Confirm##confirm_delete_current_year")){
+                for(s32 i=0; i<MAX_YEAR_COUNT; ++i){
+                    Year* y = pm->years + i;
+                    for(s32 i=0; i<Month_Count; ++i){
+                        MonthInfo* month = y->months + i;
+                        Transaction* t = month->transactions;
+                        for(s32 t_idx=0; t_idx < month->transaction_count; ++t_idx){
+                            t = t->next;
+                            dll_remove(t);
+                            pool_free(pm->transaction_pool, t);
+                            t = month->transactions;
+                        }
+                        dll_clear(month->transactions);
+                        month->transaction_count = 0;
+                    }
+                    y->transaction_count = 0;
+                }
+                pm->transaction_count = 0;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 58);
+            if(ImGui::Button("Cancel##cancel_delete_current_year")){
+                ImGui::CloseCurrentPopup();
+            }
+            if(controller_button_pressed(KeyCode_ESCAPE, true)){
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+        tooltip(str8_literal("Delete all transactions for all the year"));
 
         if(ImGui::BeginTabBar("##Month", ImGuiTabBarFlags_None)){
 
@@ -1639,10 +1815,42 @@ draw_entire_ui(void){
         ImGui::SameLine();
         ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + date_column_start);
         ImGui::Text("Date");
+        ImGui::SameLine();
+        ImGui::PushFont(my_font12);
+        fmt = str8_fmt(tm->frame_arena, "%c##sort_date_ascending", icon_lookup[Icon_UpArrow]);
+        if(ImGui::Button((char*)fmt.str)){
+            dll_bubble_sort_date(month->transactions);
+        }
+        ImGui::PopFont();
+        tooltip(str8_literal("Sort date by ascending order."));
+        ImGui::SameLine();
+        ImGui::PushFont(my_font12);
+        fmt = str8_fmt(tm->frame_arena, "%c##sort_date_descending", icon_lookup[Icon_DownArrow]);
+        if(ImGui::Button((char*)fmt.str)){
+            dll_bubble_sort_date(month->transactions, true);
+        }
+        ImGui::PopFont();
+        tooltip(str8_literal("Sort date by descending order."));
 
         ImGui::SameLine();
         ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + amount_column_start);
         ImGui::Text("Amount");
+        ImGui::SameLine();
+        ImGui::PushFont(my_font12);
+        fmt = str8_fmt(tm->frame_arena, "%c##sort_amount_ascending", icon_lookup[Icon_UpArrow]);
+        if(ImGui::Button((char*)fmt.str)){
+            dll_bubble_sort_amount(month->transactions);
+        }
+        ImGui::PopFont();
+        tooltip(str8_literal("Sort amount by ascending order."));
+        ImGui::SameLine();
+        ImGui::PushFont(my_font12);
+        fmt = str8_fmt(tm->frame_arena, "%c##sort_amount_descending", icon_lookup[Icon_DownArrow]);
+        if(ImGui::Button((char*)fmt.str)){
+            dll_bubble_sort_amount(month->transactions, true);
+        }
+        ImGui::PopFont();
+        tooltip(str8_literal("Sort amount by descending order."));
 
         ImGui::SameLine();
         ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + description_column_start);
@@ -1655,48 +1863,52 @@ draw_entire_ui(void){
         ImGui::SameLine();
         ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + plus_expense_column_start);
         if(ImGui::Button("+##add_transaction_button")){
-            Transaction* trans = (Transaction*)pool_next(pm->transaction_pool);
-            dll_push_back(month->transactions, trans);
+            if(pm->transaction_count < MAX_TRANSACTION_COUNT){
+                Transaction* trans = (Transaction*)pool_next(pm->transaction_pool);
+                dll_push_back(month->transactions, trans);
 
-            if(month->transactions_count == 0){
-                ScratchArena scratch = begin_scratch();
-                String8 date = str8_fmt(scratch.arena, "01/01/%04d", year->number);
-                memcpy((void*)trans->date, (void*)date.str, date.size);
-                end_scratch(scratch);
+                if(month->transaction_count == 0){
+                    ScratchArena scratch = begin_scratch();
+                    String8 date = str8_fmt(scratch.arena, "01/01/%04d", year->number);
+                    memcpy((void*)trans->date, (void*)date.str, date.size);
+                    end_scratch(scratch);
+                }
+                else{
+                    ScratchArena scratch = begin_scratch();
+                    Transaction* last = trans->prev;
+                    s32 date_length = (s32)char_length(last->date);
+                    String8 date_str8 = str8(last->date, date_length);
+                    String8Node* parts = str8_split(scratch.arena, date_str8, '/');
+                    parts->prev->str = str8_fmt(scratch.arena, "%04d", year->number);
+
+                    String8Join join = {0};
+                    join.mid = str8_literal("/");
+                    String8 result = str8_join(scratch.arena, parts, join);
+                    memcpy((void*)trans->date, (void*)result.str, result.count);
+                    end_scratch(scratch);
+                }
+                memcpy((void*)trans->selection, (void*)pm->selection_list->str, pm->selection_list->size);
+
+                ++month->transaction_count;
+                ++year->transaction_count;
+                ++pm->transaction_count;
             }
-            else{
-                ScratchArena scratch = begin_scratch();
-                Transaction* last = trans->prev;
-                s32 date_length = (s32)char_length(last->date);
-                String8 date_str8 = str8(last->date, date_length);
-                String8Node* parts = str8_split(scratch.arena, date_str8, '/');
-                parts->prev->str = str8_fmt(scratch.arena, "%04d", year->number);
-
-                String8Join join = {0};
-                join.mid = str8_literal("/");
-                String8 result = str8_join(scratch.arena, parts, join);
-                memcpy((void*)trans->date, (void*)result.str, result.count);
-                end_scratch(scratch);
-            }
-            memcpy((void*)trans->selection, (void*)pm->selection_list->str, pm->selection_list->size);
-
-            month->transactions_count++;
-            year->total_transactions++;
         }
         tooltip(str8_literal("Add Transaction."));
 
         ImGui::SameLine();
-        if(ImGui::Button("x##x_all_transactions")){
+        if(ImGui::Button("x##delete_all_transactions")){
             Transaction* t = month->transactions;
-            for(s32 t_idx=0; t_idx < month->transactions_count; ++t_idx){
+            for(s32 t_idx=0; t_idx < month->transaction_count; ++t_idx){
                 t = t->next;
                 dll_remove(t);
                 pool_free(pm->transaction_pool, t);
                 t = month->transactions;
             }
             dll_clear(month->transactions);
-            year->total_transactions -= month->transactions_count;
-            month->transactions_count = 0;
+            pm->transaction_count -= month->transaction_count;
+            year->transaction_count -= month->transaction_count;
+            month->transaction_count = 0;
         }
         tooltip(str8_literal("Delete All Transactions."));
 
@@ -1715,14 +1927,14 @@ draw_entire_ui(void){
             month->muted = !month->muted;
             if(month->muted){
                 Transaction* trans = month->transactions;
-                for(s32 t_idx = 0; t_idx < month->transactions_count; ++t_idx){
+                for(s32 t_idx = 0; t_idx < month->transaction_count; ++t_idx){
                     trans = trans->next;
                     trans->muted = true;
                 }
             }
             else{
                 Transaction* trans = month->transactions;
-                for(s32 t_idx = 0; t_idx < month->transactions_count; ++t_idx){
+                for(s32 t_idx = 0; t_idx < month->transaction_count; ++t_idx){
                     trans = trans->next;
                     trans->muted = false;
                 }
@@ -1734,7 +1946,7 @@ draw_entire_ui(void){
 
         // note: popluate empty amount's in transactions with 0's for visual appeal
         Transaction* trans = month->transactions;
-        for(s32 t_idx = 0; t_idx < month->transactions_count; ++t_idx){
+        for(s32 t_idx = 0; t_idx < month->transaction_count; ++t_idx){
             trans = trans->next;
 
             if(trans->amount[0] == 0){
@@ -1776,7 +1988,7 @@ draw_entire_ui(void){
         ImGui::BeginChild("transactions_child", ImVec2(0, 0), true, 0);
         trans = month->transactions;
         f32 minus_padding = 8;
-        for(s32 t_idx=0; t_idx < month->transactions_count; ++t_idx){
+        for(s32 t_idx=0; t_idx < month->transaction_count; ++t_idx){
             trans = trans->next;
 
             ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + hash_column_start - minus_padding);
@@ -1920,10 +2132,11 @@ draw_entire_ui(void){
 
             ImGui::SameLine();
             ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + x_expense_column_start - minus_padding);
-            String8 delete_id = str8_formatted(scratch.arena, "x##remove_transaction%i", t_idx);
+            String8 delete_id = str8_formatted(scratch.arena, "x##delete_transaction%i", t_idx);
             if(ImGui::Button((char*)delete_id.data)){
-                --month->transactions_count;
-                --year->total_transactions;
+                --month->transaction_count;
+                --year->transaction_count;
+                --pm->transaction_count;
 
                 dll_remove(trans);
                 pool_free(pm->transaction_pool, trans);
@@ -1975,7 +2188,7 @@ collect_totals_for_months(void){
 
                 if(!month->muted){
                     Transaction* trans = month->transactions;
-                    for(s32 t_idx = 0; t_idx < month->transactions_count; ++t_idx){
+                    for(s32 t_idx = 0; t_idx < month->transaction_count; ++t_idx){
                         trans = trans->next;
                         if(!trans->muted){
                             u32 t_length = char_length(trans->selection);
@@ -2033,8 +2246,8 @@ collect_totals_for_months(void){
             month->totals.planned = round_to_hundredth(month_total_planned);
             month->totals.spent   = round_to_hundredth(month_total_spent);
             month->totals.diff    = round_to_hundredth(month_total_diff);
-            month->totals.saved   = round_to_hundredth(atof((char*)pm->budget.str) - month->totals.spent);
-            month->totals.goal    = round_to_hundredth(atof((char*)pm->budget.str) - month->totals.planned);
+            month->totals.saved   = round_to_hundredth(atof(pm->budget) - month->totals.spent);
+            month->totals.goal    = round_to_hundredth(atof(pm->budget) - month->totals.planned);
         }
         else{
             month->totals.planned = 0;
@@ -2063,8 +2276,8 @@ collect_totals_for_months(void){
                 totals->planned += month->totals.planned;
                 totals->spent   += month->totals.spent;
                 totals->diff    += month->totals.diff;
-                totals->saved   += atof((char*)pm->budget.str) - month->totals.spent;
-                totals->goal    += atof((char*)pm->budget.str) - month->totals.planned;
+                totals->saved   += atof(pm->budget) - month->totals.spent;
+                totals->goal    += atof(pm->budget) - month->totals.planned;
             }
         }
         totals->planned = round_to_hundredth(totals->planned);
@@ -2095,8 +2308,8 @@ collect_totals_for_months(void){
                 totals->planned += month->totals.planned;
                 totals->spent   += month->totals.spent;
                 totals->diff    += month->totals.diff;
-                totals->saved   += atof((char*)pm->budget.str) - month->totals.spent;
-                totals->goal    += atof((char*)pm->budget.str) - month->totals.planned;
+                totals->saved   += atof(pm->budget) - month->totals.spent;
+                totals->goal    += atof(pm->budget) - month->totals.planned;
             }
         }
         totals->planned = round_to_hundredth(totals->planned);
@@ -2122,8 +2335,8 @@ collect_totals_for_months(void){
             pm->annual_totals.planned += month->totals.planned;
             pm->annual_totals.spent   += month->totals.spent;
             pm->annual_totals.diff    += month->totals.diff;
-            pm->annual_totals.saved   += atof((char*)pm->budget.str) - month->totals.spent;
-            pm->annual_totals.goal    += atof((char*)pm->budget.str) - month->totals.planned;
+            pm->annual_totals.saved   += atof(pm->budget) - month->totals.spent;
+            pm->annual_totals.goal    += atof(pm->budget) - month->totals.planned;
         }
     }
     pm->annual_totals.planned = round_to_hundredth(pm->annual_totals.planned);
@@ -2146,7 +2359,7 @@ collect_totals_for_months(void){
                 MonthInfo* month = pm->year->months + pm->month_tab_idx;
                 if(!month->muted){
                     Transaction* trans = month->transactions;
-                    for(s32 t_idx = 0; t_idx < month->transactions_count; ++t_idx){
+                    for(s32 t_idx = 0; t_idx < month->transaction_count; ++t_idx){
                         trans = trans->next;
                         if(!trans->muted){
                             u32 t_length = char_length(trans->selection);
@@ -2204,8 +2417,8 @@ collect_totals_for_months(void){
         month->totals.planned = round_to_hundredth(month_total_planned);
         month->totals.spent   = round_to_hundredth(month_total_spent);
         month->totals.diff    = round_to_hundredth(month_total_diff);
-        month->totals.saved   = round_to_hundredth(atof((char*)pm->budget.str) - month->totals.spent);
-        month->totals.goal    = round_to_hundredth(atof((char*)pm->budget.str) - month->totals.planned);
+        month->totals.saved   = round_to_hundredth(atof(pm->budget) - month->totals.spent);
+        month->totals.goal    = round_to_hundredth(atof(pm->budget) - month->totals.planned);
     }
 
     // note mute/unmute category based on rows muted.
@@ -2231,7 +2444,7 @@ collect_totals_for_months(void){
 
         bool all_muted = true;
         Transaction* trans = month->transactions;
-        for(s32 t_idx = 0; t_idx < month->transactions_count; ++t_idx){
+        for(s32 t_idx = 0; t_idx < month->transaction_count; ++t_idx){
             trans = trans->next;
             if(!trans->muted){
                 all_muted = false;
@@ -2301,12 +2514,12 @@ do_one_frame(void){
     }
     // todo(rr): maybe remove?
     if(controller_button_pressed(KeyCode_ESCAPE, true)){
-        should_quit = true;
+        //should_quit = true;
 
     }
     clear_controller_pressed();
 
-    // NOTE IMPORTANT(rr): WE SERIALIZE ALL THE TIME
+    // IMPORTANT NOTE(rr): WE SERIALIZE ALL THE TIME
     serialize_config();
     serialize_budget();
     Year* year;
@@ -2321,7 +2534,6 @@ do_one_frame(void){
 
 s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 window_type){
     begin_profiler();
-
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -2363,13 +2575,12 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         tm->options_arena = push_arena(&tm->arena, MB(100));
 
         // create pools
-        pm->category_pool    = push_pool(&pm->arena, sizeof(Category), 256);
-        pm->row_pool         = push_pool(&pm->arena, sizeof(Row), 2048);
-        pm->transaction_pool = push_pool(&pm->arena, sizeof(Transaction), 8192);
-        pm->csv_profile_pool = push_pool(&pm->arena, sizeof(CSV_Profile), 32);
+        pm->category_pool    = push_pool(&pm->arena, sizeof(Category), MAX_CATEGORY_COUNT);
+        pm->row_pool         = push_pool(&pm->arena, sizeof(Row), MAX_ROW_COUNT);
+        pm->transaction_pool = push_pool(&pm->arena, sizeof(Transaction), MAX_TRANSACTION_COUNT);
+        pm->csv_profile_pool = push_pool(&pm->arena, sizeof(CSV_Profile), MAX_PROFILE_COUNT);
         // todo(rr): maybe I can just use scratch memory? I don't think I need this
         pm->data_arena       = push_arena(&pm->arena, MB(1));
-        //pm->date_formats_arena = push_arena(&pm->arena, sizeof(Date_Format) * 128);
 
         // setup free list from pools
         pool_free_all(pm->category_pool);
@@ -2377,7 +2588,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         pool_free_all(pm->transaction_pool);
         pool_free_all(pm->csv_profile_pool);
 
-        // setup sentinel node or categories
+        // setup sentinel node for categories
         pm->month_categories = (Category*)pool_next(pm->category_pool);
         dll_clear(pm->month_categories);
         pm->quarter_categories = (Category*)pool_next(pm->category_pool);
@@ -2389,10 +2600,14 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         pm->csv_profiles = (CSV_Profile*)pool_next(pm->csv_profile_pool);
         dll_clear(pm->csv_profiles);
 
+        pm->yyyy.str = push_array(&pm->arena, u8, 32);
+        pm->mm.str = push_array(&pm->arena, u8, 32);
+        pm->dd.str = push_array(&pm->arena, u8, 32);
+
         //setup_date_formats();
 
         // give selection list memory
-        pm->selection_list = push_array(tm->options_arena, String8, 1024);
+        pm->selection_list = push_array(tm->options_arena, String8, MAX_SELECTION_LIST_COUNT);
         for(s32 i=0; i < SELECTION_LIST_SIZE; ++i){
             String8* option = pm->selection_list + i;
             option->str = push_array(tm->options_arena, u8, 128);
@@ -2400,7 +2615,6 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         *pm->selection_list = str8(" \0", 2);
         pm->default_path = os_application_path(&pm->arena);
 
-        pm->budget.data = push_array(global_arena, u8, 128);
         pm->draw_month_plan = true;
         pm->draw_quarter_plan = true;
         pm->draw_biannual_plan = true;
@@ -2468,19 +2682,30 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         combo_popup_alternating_colors[0] = ImColor(10, 10, 10, 255);
         combo_popup_alternating_colors[1] = ImColor(20, 20, 20, 255);
 
-        // load assets
-        Bitmap bm;
-        bm = stb_load_image(&pm->arena, sprites_path, str8_literal("gear.png"));
-        d3d_init_texture_resource(&gear_texture.view, &bm);
-        gear_texture_id = (ImTextureID)gear_texture.view;
+        ImGuiIO& io = ImGui::GetIO();
+        io.Fonts->AddFontDefault();
+        ImFontConfig font_cfg;
+        font_cfg.FontDataOwnedByAtlas = false;
+        my_font12 = io.Fonts->AddFontFromMemoryTTF((void*)budgeteer_font, array_count(budgeteer_font), 12.0f, &font_cfg);
+        my_font20 = io.Fonts->AddFontFromMemoryTTF((void*)budgeteer_font, array_count(budgeteer_font), 20.0f, &font_cfg);
+        io.Fonts->Build();
 
-        bm = stb_load_image(&pm->arena, sprites_path, str8_literal("green_box.png"));
-        d3d_init_texture_resource(&green_box_texture.view, &bm);
-        green_box_texture_id = (ImTextureID)green_box_texture.view;
-
-        bm = stb_load_image(&pm->arena, sprites_path, str8_literal("red_box.png"));
-        d3d_init_texture_resource(&red_box_texture.view, &bm);
-        red_box_texture_id = (ImTextureID)red_box_texture.view;
+        GREEN = {
+            .r = 112/255.0f,
+            .g = 197/255.0f,
+            .b = 72/255.0f,
+            .a = 255.0f,
+        };
+        GREEN = linear_from_srgb(GREEN);
+        GREEN = RGBA_1_to_255(GREEN);
+        RED = {
+            .r = 194/255.0f,
+            .g = 83/255.0f,
+            .b = 73/255.0f,
+            .a = 255.0f,
+        };
+        RED = linear_from_srgb(RED);
+        RED = RGBA_1_to_255(RED);
 
         memory.initialized = true;
     }
@@ -2519,4 +2744,3 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
     return(0);
 }
-
