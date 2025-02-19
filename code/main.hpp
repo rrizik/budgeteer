@@ -36,7 +36,6 @@
 #include "imgui/imgui_impl_dx11.h"
 
 #include "tinyfiledialogs/tinyfiledialogs.h"
-
 #include "meta.h"
 
 static String8 build_path;
