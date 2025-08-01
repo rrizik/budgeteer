@@ -256,15 +256,13 @@ typedef struct CSV_Profile{
 typedef struct PermanentMemory{
     // memory
     Arena arena;
-    PoolArena* category_pool;
+    PoolArena* category_group_pool;
     PoolArena* row_pool;
     PoolArena* transaction_pool;
     PoolArena* csv_profile_pool;
     Arena* data_arena;
 
-    //HashTable category_table;
-
-    // category/rows/months/transactions
+    // category_group/rows/months/transactions
     CategoryGroup* annual_categories;
     CategoryGroup* biannual_categories;
     CategoryGroup* quarter_categories;
@@ -343,7 +341,6 @@ typedef struct TransientMemory{
     Arena arena;
     Arena *frame_arena;
     Arena *options_arena;
-    //Arena *category_table_arena;
 
 } TransientMemory;
 global TransientMemory* tm;
@@ -375,10 +372,10 @@ static f32 collapse_column_width = 25.0f;
 static f32 row_count_column_start = collapse_column_start + collapse_column_width;
 static f32 row_count_column_width = 25.0f;
 
-static f32 category_column_start = row_count_column_start + row_count_column_width;
-static f32 category_column_width = 100.0f;
+static f32 category_group_column_start = row_count_column_start + row_count_column_width;
+static f32 category_group_column_width = 100.0f;
 
-static f32 planned_column_start = category_column_start + category_column_width + 10.0f;
+static f32 planned_column_start = category_group_column_start + category_group_column_width + 10.0f;
 static f32 planned_column_width = 75.0f;
 
 static f32 spent_column_start = planned_column_start + planned_column_width + 10.0f;
@@ -403,9 +400,9 @@ static f32 amount_column_start = date_column_start + date_column_width + 20;
 static f32 amount_column_width = 90;
 static f32 description_column_start = amount_column_start + amount_column_width + 20;
 static f32 description_column_width = 160;
-static f32 category_select_column_start = description_column_start + description_column_width + 10;
-static f32 category_select_column_width = 100;
-static f32 plus_expense_column_start = category_select_column_start + category_select_column_width + 10;
+static f32 category_group_select_column_start = description_column_start + description_column_width + 10;
+static f32 category_group_select_column_width = 100;
+static f32 plus_expense_column_start = category_group_select_column_start + category_group_select_column_width + 10;
 static f32 plus_expense_column_width = 23;
 static f32 x_expense_column_start = plus_expense_column_start + plus_expense_column_width;
 
@@ -1550,7 +1547,7 @@ deserialize_budget(void){
             if(str8_compare(line, str8_literal("#budget\n"))){
                 bps = BudgetParsingState_Budget;
             }
-            else if(str8_compare(line, str8_literal("#category\n"))){
+            else if(str8_compare(line, str8_literal("#category_group\n"))){
                 bps = BudgetParsingState_CategoryGroup;
             }
         }
@@ -1571,10 +1568,10 @@ deserialize_budget(void){
             }
         }
         else if(bps == BudgetParsingState_CategoryGroup){
-            CategoryGroup* category = (CategoryGroup*)pool_next(pm->category_pool);
-            dll_push_back(pm->month_categories, category);
-            category->rows = (Row*)pool_next(pm->row_pool);
-            dll_clear(category->rows);
+            CategoryGroup* category_group = (CategoryGroup*)pool_next(pm->category_group_pool);
+            dll_push_back(pm->month_categories, category_group);
+            category_group->rows = (Row*)pool_next(pm->row_pool);
+            dll_clear(category_group->rows);
             ++pm->categories_count;
 
             while(line.size){
@@ -1589,24 +1586,24 @@ deserialize_budget(void){
                     String8 value = str8_node->prev->str;
 
                     if(str8_compare(key, str8_literal("name"))){
-                        copy_str8_to_char(category->name, value, TRANS_DESCRIPTION_SIZE);
+                        copy_str8_to_char(category_group->name, value, TRANS_DESCRIPTION_SIZE);
                     }
                     else if(str8_compare(key, str8_literal("draw_rows"))){
-                        category->draw_rows = atoi((char*)value.str);
+                        category_group->draw_rows = atoi((char*)value.str);
                     }
                     else if(str8_compare(key, str8_literal("muted"))){
-                        category->muted = atoi((char*)value.str);
+                        category_group->muted = atoi((char*)value.str);
                     }
                 }
             }
             bps = BudgetParsingState_Row;
         }
         else if(bps == BudgetParsingState_Row){
-            CategoryGroup* category = pm->month_categories->prev;
-            ++category->row_count;
+            CategoryGroup* category_group = pm->month_categories->prev;
+            ++category_group->row_count;
 
             Row* row = (Row*)pool_next(pm->row_pool);
-            dll_push_back(category->rows, row);
+            dll_push_back(category_group->rows, row);
             ++pm->total_rows_count;
 
             while(line.size){
@@ -1650,7 +1647,7 @@ serialize_budget(void){
     for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
         c = c->next;
 
-        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#category\n");
+        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#category_group\n");
         arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
                               "name=%s\x1B draw_rows=%i muted=%i\n", c->name, c->draw_rows, c->muted);
 

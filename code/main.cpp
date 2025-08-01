@@ -702,7 +702,7 @@ draw_entire_ui(void){
             ImGui::SetCursorPosX(row_count_column_start + input_padding);
             ImGui::Text("#");
             ImGui::SameLine();
-            ImGui::SetCursorPosX(category_column_start);
+            ImGui::SetCursorPosX(category_group_column_start);
             ImGui::Text("Category Group");
             ImGui::SameLine();
             ImGui::SetCursorPosX(planned_column_start);
@@ -715,12 +715,12 @@ draw_entire_ui(void){
             ImGui::Text("Diff");
             ImGui::SameLine();
             ImGui::SetCursorPosX(plus_column_start);
-            if(ImGui::Button("+##add_category_button")){
+            if(ImGui::Button("+##add_category_group_button")){
                 if(pm->categories_count < MAX_CATEGORY_GROUP_COUNT){
-                    CategoryGroup* category = (CategoryGroup*)pool_next(pm->category_pool);
-                    dll_push_back(pm->month_categories, category);
-                    category->rows = (Row*)pool_next(pm->row_pool);
-                    dll_clear(category->rows);
+                    CategoryGroup* category_group = (CategoryGroup*)pool_next(pm->category_group_pool);
+                    dll_push_back(pm->month_categories, category_group);
+                    category_group->rows = (Row*)pool_next(pm->row_pool);
+                    dll_clear(category_group->rows);
 
                     pm->categories_count++;
                 }
@@ -731,12 +731,12 @@ draw_entire_ui(void){
             tooltip(str8_literal("Add New Category Group."));
 
             //note: popluate empty planned with 0's for visual appeal
-            CategoryGroup* category = pm->month_categories;
+            CategoryGroup* category_group = pm->month_categories;
             for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
-                category = category->next;
+                category_group = category_group->next;
 
-                Row* row = category->rows;
-                for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
+                Row* row = category_group->rows;
+                for(s32 r_idx = 0; r_idx < category_group->row_count; ++r_idx){
                     row = row->next;
 
                     if(row->planned[0] == 0){
@@ -746,25 +746,25 @@ draw_entire_ui(void){
                 }
             }
 
-            category = pm->month_categories;
+            category_group = pm->month_categories;
             for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
                 custom_separator();
-                category = category->next;
+                category_group = category_group->next;
 
                 ImGui::SetCursorPosX(collapse_column_start);
                 ImGui::PushID(c_idx);
                 ImGui::PushFont(my_font12);
-                if(category->draw_rows){
+                if(category_group->draw_rows){
                     fmt = str8_fmt(tm->frame_arena, "%c##", icon_lookup[Icon_Collapse]);
                     if(ImGui::Button((char*)fmt.str)){
-                        category->draw_rows = false;
+                        category_group->draw_rows = false;
                     }
                 }
                 else{
                     fmt = str8_fmt(tm->frame_arena, "%c##", icon_lookup[Icon_Expand]);
                     if(ImGui::Button((char*)fmt.str)){
-                        if(category->row_count){
-                            category->draw_rows = true;
+                        if(category_group->row_count){
+                            category_group->draw_rows = true;
                         }
                     }
                 }
@@ -775,7 +775,7 @@ draw_entire_ui(void){
 
                 if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)){
                     ImGui::SetDragDropPayload("DRAG_ROW", &c_idx, sizeof(s32));
-                    ImGui::Text("%s", category->name);
+                    ImGui::Text("%s", category_group->name);
                     ImGui::EndDragDropSource();
                 }
                 if(ImGui::BeginDragDropTarget()){
@@ -787,7 +787,7 @@ draw_entire_ui(void){
                             for(s32 i=0; i <= from_idx; ++i){
                                 c = c->next;
                             }
-                            dll_swap(c, category, CategoryGroup);
+                            dll_swap(c, category_group, CategoryGroup);
                         }
                     }
                     ImGui::EndDragDropTarget();
@@ -795,41 +795,41 @@ draw_entire_ui(void){
 
                 ImGui::SameLine();
                 ImGui::SetCursorPosX(row_count_column_start + input_padding);
-                if(category->draw_rows){
+                if(category_group->draw_rows){
                     ImGui::Text("-");
                 }
                 else{
-                    ImGui::Text("%i", category->row_count);
+                    ImGui::Text("%i", category_group->row_count);
                 }
 
                 ImGui::SameLine();
 
 
-                ImGui::SetCursorPosX(category_column_start);
-                ImGui::PushItemWidth(category_column_width);
-                String8 unique_id = str8_formatted(scratch.arena, "##category%i", c_idx);
-                ImGui::InputText((char*)unique_id.data, category->name, CAT_NAME_SIZE, ImGuiInputTextFlags_AutoSelectAll);
+                ImGui::SetCursorPosX(category_group_column_start);
+                ImGui::PushItemWidth(category_group_column_width);
+                String8 unique_id = str8_formatted(scratch.arena, "##category_group%i", c_idx);
+                ImGui::InputText((char*)unique_id.data, category_group->name, CAT_NAME_SIZE, ImGuiInputTextFlags_AutoSelectAll);
                 ImGui::PopItemWidth();
 
                 ImGui::SameLine();
                 ImGui::SetCursorPosX(planned_column_start + input_padding);
-                String8 planned_str = str8_formatted(scratch.arena, "$%.2f", category->planned);
+                String8 planned_str = str8_formatted(scratch.arena, "$%.2f", category_group->planned);
                 ImGui::Text((char*)planned_str.data);
 
                 ImGui::SameLine();
                 ImGui::SetCursorPosX(spent_column_start + input_padding);
-                String8 spent_str = str8_formatted(scratch.arena, "$%.2f", category->spent);
+                String8 spent_str = str8_formatted(scratch.arena, "$%.2f", category_group->spent);
                 ImGui::Text((char*)spent_str.data);
 
                 ImGui::SameLine();
                 ImGui::SetCursorPosX(diff_column_start);
-                category->diff = category->planned - category->spent;
-                String8 category_diff = str8_formatted(scratch.arena, "$%.2f", category->diff);
-                if(category->diff < 0){
+                category_group->diff = category_group->planned - category_group->spent;
+                String8 category_group_diff = str8_formatted(scratch.arena, "$%.2f", category_group->diff);
+                if(category_group->diff < 0){
                     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
                 }
-                ImGui::Text((char*)category_diff.data);
-                if(category->diff < 0){
+                ImGui::Text((char*)category_group_diff.data);
+                if(category_group->diff < 0){
                     ImGui::PopStyleColor();
                 }
 
@@ -839,10 +839,10 @@ draw_entire_ui(void){
                 if(ImGui::Button("+##add_row_button")){
                     if(pm->total_rows_count < MAX_ROW_COUNT){
                         Row* r = (Row*)pool_next(pm->row_pool);
-                        dll_push_back(category->rows, r);
+                        dll_push_back(category_group->rows, r);
 
-                        category->draw_rows = true;
-                        category->row_count++;
+                        category_group->draw_rows = true;
+                        category_group->row_count++;
                         pm->total_rows_count++;
                     }
                     else{
@@ -855,12 +855,12 @@ draw_entire_ui(void){
                 ImGui::SameLine();
                 ImGui::SetCursorPosX(x_column_start);
                 ImGui::PushID(c_idx);
-                if(ImGui::Button("x##remove_category")){
-                    pm->total_rows_count -= category->row_count;
+                if(ImGui::Button("x##remove_category_group")){
+                    pm->total_rows_count -= category_group->row_count;
                     --pm->categories_count;
 
-                    dll_remove(category);
-                    pool_free(pm->category_pool, category);
+                    dll_remove(category_group);
+                    pool_free(pm->category_group_pool, category_group);
                 }
                 tooltip(str8_literal("Delete All Sub-Categories."));
                 ImGui::PopID();
@@ -868,7 +868,7 @@ draw_entire_ui(void){
                 ImGui::SameLine();
                 ImGui::SetCursorPosX(m_column_start);
                 ImGui::PushID(c_idx);
-                if(category->muted){
+                if(category_group->muted){
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.1f, 0.0f, 1.0f));
                 }
@@ -876,18 +876,18 @@ draw_entire_ui(void){
                     ImGui::PushStyleColor(ImGuiCol_Button, pm->default_button_color);
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, pm->default_button_hovered_color);
                 }
-                if(ImGui::Button("m##mute_category")){
-                    category->muted = !category->muted;
-                    if(category->muted){
-                        Row* row = category->rows;
-                        for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
+                if(ImGui::Button("m##mute_category_group")){
+                    category_group->muted = !category_group->muted;
+                    if(category_group->muted){
+                        Row* row = category_group->rows;
+                        for(s32 r_idx = 0; r_idx < category_group->row_count; ++r_idx){
                             row = row->next;
                             row->muted = true;
                         }
                     }
                     else{
-                        Row* row = category->rows;
-                        for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
+                        Row* row = category_group->rows;
+                        for(s32 r_idx = 0; r_idx < category_group->row_count; ++r_idx){
                             row = row->next;
                             row->muted = false;
                         }
@@ -897,15 +897,15 @@ draw_entire_ui(void){
                 ImGui::PopID();
                 ImGui::PopStyleColor(2);
 
-                // render rows per category
-                Row* row = category->rows;
-                for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
+                // render rows per category_group
+                Row* row = category_group->rows;
+                for(s32 r_idx = 0; r_idx < category_group->row_count; ++r_idx){
                     row = row->next;
 
                     String8 s_id = str8_formatted(scratch.arena, "%i%i", r_idx + 1, c_idx + 1);
                     s32 uid = atoi((char*)s_id.data);
 
-                    if(category->draw_rows){
+                    if(category_group->draw_rows){
                         ImGui::SetCursorPosX(row_count_column_start);
                         ImGui::PushID(uid);
                         String8 num_button = str8_formatted(scratch.arena, "%i", r_idx + 1);
@@ -924,7 +924,7 @@ draw_entire_ui(void){
                                 s32* payload_data = (s32*)payload->Data;
                                 s32 from_idx = *payload_data;
                                 if(from_idx != r_idx){
-                                    Row* r = category->rows;
+                                    Row* r = category_group->rows;
                                     // note(rr): iterate to the correct node, since we cant index with linked lists
                                     for(s32 i=0; i <= from_idx; ++i){
                                         r = r->next;
@@ -937,9 +937,9 @@ draw_entire_ui(void){
 
                         ImGui::SameLine();
 
-                        ImGui::SetCursorPosX(category_column_start);
-                        ImGui::PushItemWidth(category_column_width);
-                        String8 input_id = str8_formatted(scratch.arena, "##sub_category%i%i", r_idx, c_idx);
+                        ImGui::SetCursorPosX(category_group_column_start);
+                        ImGui::PushItemWidth(category_group_column_width);
+                        String8 input_id = str8_formatted(scratch.arena, "##sub_category_group%i%i", r_idx, c_idx);
                         ImGui::InputText((char*)input_id.data, row->name, ROW_NAME_SIZE, ImGuiInputTextFlags_AutoSelectAll);
                         ImGui::PopItemWidth();
 
@@ -975,7 +975,7 @@ draw_entire_ui(void){
                         ImGui::PushID(uid);
                         if(ImGui::Button("x##remove_row")){
                             --pm->total_rows_count;
-                            --category->row_count;
+                            --category_group->row_count;
 
                             dll_remove(row);
                             pool_free(pm->row_pool, row);
@@ -1028,7 +1028,7 @@ draw_entire_ui(void){
             ImGui::SetCursorPosX(row_count_column_start + input_padding);
             ImGui::Text("#");
             ImGui::SameLine();
-            ImGui::SetCursorPosX(category_column_start);
+            ImGui::SetCursorPosX(category_group_column_start);
             ImGui::Text("Q1 CategoryGroup");
             ImGui::SameLine();
             ImGui::SetCursorPosX(planned_column_start);
@@ -1041,11 +1041,11 @@ draw_entire_ui(void){
             ImGui::Text("Diff");
             ImGui::SameLine();
             ImGui::SetCursorPosX(plus_column_start);
-            if(ImGui::Button("+##add_quarter_category_button")){
-                //CategoryGroup* category = (CategoryGroup*)pool_next(pm->category_pool);
-                //dll_push_back(pm->quarter_categories, category);
-                //category->rows = (Row*)pool_next(pm->row_pool);
-                //dll_clear(category->rows);
+            if(ImGui::Button("+##add_quarter_category_group_button")){
+                //CategoryGroup* category_group = (CategoryGroup*)pool_next(pm->category_group_pool);
+                //dll_push_back(pm->quarter_categories, category_group);
+                //category_group->rows = (Row*)pool_next(pm->row_pool);
+                //dll_clear(category_group->rows);
 
                 //pm->quarter_categories_count++;
             }
@@ -1075,7 +1075,7 @@ draw_entire_ui(void){
             ImGui::SetCursorPosX(row_count_column_start + input_padding);
             ImGui::Text("#");
             ImGui::SameLine();
-            ImGui::SetCursorPosX(category_column_start);
+            ImGui::SetCursorPosX(category_group_column_start);
             ImGui::Text("Q1 CategoryGroup");
             ImGui::SameLine();
             ImGui::SetCursorPosX(planned_column_start);
@@ -1088,11 +1088,11 @@ draw_entire_ui(void){
             ImGui::Text("Diff");
             ImGui::SameLine();
             ImGui::SetCursorPosX(plus_column_start);
-            if(ImGui::Button("+##add_biannual_category_button")){
-                //CategoryGroup* category = (CategoryGroup*)pool_next(pm->category_pool);
-                //dll_push_back(pm->biannual_categories, category);
-                //category->rows = (Row*)pool_next(pm->row_pool);
-                //dll_clear(category->rows);
+            if(ImGui::Button("+##add_biannual_category_group_button")){
+                //CategoryGroup* category_group = (CategoryGroup*)pool_next(pm->category_group_pool);
+                //dll_push_back(pm->biannual_categories, category_group);
+                //category_group->rows = (Row*)pool_next(pm->row_pool);
+                //dll_clear(category_group->rows);
 
                 //pm->biannual_categories_count++;
             }
@@ -1122,7 +1122,7 @@ draw_entire_ui(void){
             ImGui::SetCursorPosX(row_count_column_start + input_padding);
             ImGui::Text("#");
             ImGui::SameLine();
-            ImGui::SetCursorPosX(category_column_start);
+            ImGui::SetCursorPosX(category_group_column_start);
             ImGui::Text("Q1 CategoryGroup");
             ImGui::SameLine();
             ImGui::SetCursorPosX(planned_column_start);
@@ -1135,31 +1135,31 @@ draw_entire_ui(void){
             ImGui::Text("Diff");
             ImGui::SameLine();
             ImGui::SetCursorPosX(plus_column_start);
-            if(ImGui::Button("+##add_annual_category_button")){
-                //CategoryGroup* category = (CategoryGroup*)pool_next(pm->category_pool);
-                //dll_push_back(pm->annual_categories, category);
-                //category->rows = (Row*)pool_next(pm->row_pool);
-                //dll_clear(category->rows);
+            if(ImGui::Button("+##add_annual_category_group_button")){
+                //CategoryGroup* category_group = (CategoryGroup*)pool_next(pm->category_group_pool);
+                //dll_push_back(pm->annual_categories, category_group);
+                //category_group->rows = (Row*)pool_next(pm->row_pool);
+                //dll_clear(category_group->rows);
 
                 //pm->annual_categories_count++;
             }
             tooltip(str8_literal("Add New Category Group."));
 
-            //CategoryGroup* category = pm->annual_categories;
+            //CategoryGroup* category_group = pm->annual_categories;
             //for(s32 c_idx = 0; c_idx < pm->annual_categories_count; ++c_idx){
-            //    category = category->next;
+            //    category_group = category_group->next;
 
             //    ImGui::SetCursorPosX(collapse_column_start);
             //    ImGui::PushID(c_idx);
-            //    if(category->draw_rows){
+            //    if(category_group->draw_rows){
             //        if(ImGui::Button("V")){
-            //            category->draw_rows = false;
+            //            category_group->draw_rows = false;
             //        }
             //    }
             //    else{
             //        if(ImGui::Button(">")){
-            //            if(category->row_count){
-            //                category->draw_rows = true;
+            //            if(category_group->row_count){
+            //                category_group->draw_rows = true;
             //            }
             //        }
             //    }
@@ -1168,7 +1168,7 @@ draw_entire_ui(void){
 
             //    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)){
             //        ImGui::SetDragDropPayload("DRAG_ROW", &c_idx, sizeof(s32));
-            //        ImGui::Text("%s", category->name);
+            //        ImGui::Text("%s", category_group->name);
             //        ImGui::EndDragDropSource();
             //    }
             //    if(ImGui::BeginDragDropTarget()){
@@ -1180,7 +1180,7 @@ draw_entire_ui(void){
             //                for(s32 i=0; i <= from_idx; ++i){
             //                    c = c->next;
             //                }
-            //                dll_swap(c, category, CategoryGroup);
+            //                dll_swap(c, category_group, CategoryGroup);
             //            }
             //        }
             //        ImGui::EndDragDropTarget();
@@ -1188,41 +1188,41 @@ draw_entire_ui(void){
 
             //    ImGui::SameLine();
             //    ImGui::SetCursorPosX(row_count_column_start + input_padding);
-            //    if(category->draw_rows){
+            //    if(category_group->draw_rows){
             //        ImGui::Text("-");
             //    }
             //    else{
-            //        ImGui::Text("%i", category->row_count);
+            //        ImGui::Text("%i", category_group->row_count);
             //    }
 
             //    ImGui::SameLine();
 
 
-            //    ImGui::SetCursorPosX(category_column_start);
-            //    ImGui::PushItemWidth(category_column_width);
-            //    String8 unique_id = str8_formatted(scratch.arena, "##category%i", c_idx);
-            //    ImGui::InputText((char*)unique_id.data, category->name, CAT_NAME_SIZE, ImGuiInputTextFlags_AutoSelectAll);
+            //    ImGui::SetCursorPosX(category_group_column_start);
+            //    ImGui::PushItemWidth(category_group_column_width);
+            //    String8 unique_id = str8_formatted(scratch.arena, "##category_group%i", c_idx);
+            //    ImGui::InputText((char*)unique_id.data, category_group->name, CAT_NAME_SIZE, ImGuiInputTextFlags_AutoSelectAll);
             //    ImGui::PopItemWidth();
 
             //    ImGui::SameLine();
             //    ImGui::SetCursorPosX(planned_column_start + input_padding);
-            //    String8 planned_str = str8_formatted(scratch.arena, "%.2f", category->planned);
+            //    String8 planned_str = str8_formatted(scratch.arena, "%.2f", category_group->planned);
             //    ImGui::Text((char*)planned_str.data);
 
             //    ImGui::SameLine();
             //    ImGui::SetCursorPosX(spent_column_start + input_padding);
-            //    String8 spent_str = str8_formatted(scratch.arena, "%.2f", category->spent);
+            //    String8 spent_str = str8_formatted(scratch.arena, "%.2f", category_group->spent);
             //    ImGui::Text((char*)spent_str.data);
 
             //    ImGui::SameLine();
             //    ImGui::SetCursorPosX(diff_column_start);
-            //    category->diff = category->planned - category->spent;
-            //    String8 category_diff = str8_formatted(scratch.arena, "%.2f", category->diff);
-            //    if(category->diff < 0){
+            //    category_group->diff = category_group->planned - category_group->spent;
+            //    String8 category_group_diff = str8_formatted(scratch.arena, "%.2f", category_group->diff);
+            //    if(category_group->diff < 0){
             //        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
             //    }
-            //    ImGui::Text((char*)category_diff.data);
-            //    if(category->diff < 0){
+            //    ImGui::Text((char*)category_group_diff.data);
+            //    if(category_group->diff < 0){
             //        ImGui::PopStyleColor();
             //    }
 
@@ -1231,10 +1231,10 @@ draw_entire_ui(void){
             //    ImGui::PushID(c_idx);
             //    if(ImGui::Button("+##add_row_button")){
             //        Row* r = (Row*)pool_next(pm->row_pool);
-            //        dll_push_back(category->rows, r);
+            //        dll_push_back(category_group->rows, r);
 
-            //        category->draw_rows = true;
-            //        category->row_count++;
+            //        category_group->draw_rows = true;
+            //        category_group->row_count++;
             //        //pm->total_rows_count++;
             //    }
             //    ImGui::PopID();
@@ -1242,19 +1242,19 @@ draw_entire_ui(void){
             //    ImGui::SameLine();
             //    ImGui::SetCursorPosX(x_column_start);
             //    ImGui::PushID(c_idx);
-            //    if(ImGui::Button("x##remove_category")){
-            //        //pm->total_rows_count -= category->row_count;
+            //    if(ImGui::Button("x##remove_category_group")){
+            //        //pm->total_rows_count -= category_group->row_count;
             //        --pm->annual_categories_count;
 
-            //        dll_remove(category);
-            //        pool_free(pm->category_pool, category);
+            //        dll_remove(category_group);
+            //        pool_free(pm->category_group_pool, category_group);
             //    }
             //    ImGui::PopID();
 
             //    ImGui::SameLine();
             //    ImGui::SetCursorPosX(m_column_start);
             //    ImGui::PushID(c_idx);
-            //    if(category->muted){
+            //    if(category_group->muted){
             //        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
             //        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.1f, 0.0f, 1.0f));
             //    }
@@ -1263,18 +1263,18 @@ draw_entire_ui(void){
             //        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, pm->default_button_hovered_color);
             //    }
             //    // todo: review this, this stuff might not have rows
-            //    if(ImGui::Button("m##mute_category")){
-            //        category->muted = !category->muted;
-            //        if(category->muted){
-            //            Row* row = category->rows;
-            //            for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
+            //    if(ImGui::Button("m##mute_category_group")){
+            //        category_group->muted = !category_group->muted;
+            //        if(category_group->muted){
+            //            Row* row = category_group->rows;
+            //            for(s32 r_idx = 0; r_idx < category_group->row_count; ++r_idx){
             //                row = row->next;
             //                row->muted = true;
             //            }
             //        }
             //        else{
-            //            Row* row = category->rows;
-            //            for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
+            //            Row* row = category_group->rows;
+            //            for(s32 r_idx = 0; r_idx < category_group->row_count; ++r_idx){
             //                row = row->next;
             //                row->muted = false;
             //            }
@@ -1741,7 +1741,7 @@ draw_entire_ui(void){
         ImGui::SameLine();
         ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + plus_expense_column_start - minus_padding - minus_padding);
         ImGui::PushFont(my_font12);
-        fmt = str8_fmt(tm->frame_arena, "%c##apply_category_to_all", icon_lookup[Icon_Check]);
+        fmt = str8_fmt(tm->frame_arena, "%c##apply_category_group_to_all", icon_lookup[Icon_Check]);
         // INCOMPLETE : this is the slow solution but just to see if it works
         if(ImGui::Button((char*)fmt.str)){
             //String8 trans_selection = str8(trans->selection, char_length(trans->selection));
@@ -1885,7 +1885,7 @@ draw_entire_ui(void){
         ImGui::Text("Description");
 
         ImGui::SameLine();
-        ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + category_select_column_start);
+        ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + category_group_select_column_start);
         ImGui::Text("Category");
 
         ImGui::SameLine();
@@ -1986,19 +1986,19 @@ draw_entire_ui(void){
         {
             // note: collect selection options
             pm->selection_count = 1;
-            CategoryGroup* category = pm->month_categories;
+            CategoryGroup* category_group = pm->month_categories;
             for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
-                category = category->next;
+                category_group = category_group->next;
 
-                Row* row = category->rows;
-                for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
+                Row* row = category_group->rows;
+                for(s32 r_idx = 0; r_idx < category_group->row_count; ++r_idx){
                     row = row->next;
 
                     String8* selection = pm->selection_list + pm->selection_count;
                     if(row->name[0] != '\0'){
                         if(!char_only_spaces(row->name)){ // don't include rows that are named only spaces
                             u32 length = char_length(row->name);
-                            String8 cat_part = str8_format(tm->frame_arena, "%s: ", category->name);
+                            String8 cat_part = str8_format(tm->frame_arena, "%s: ", category_group->name);
                             String8 name_part = str8(row->name, length + 1); // + 1 to include 0 terminater
                             String8 full = str8_concatenate(tm->frame_arena, cat_part, name_part);
                             *selection = full;
@@ -2069,26 +2069,26 @@ draw_entire_ui(void){
             // note: selection box
             {
                 ImGui::SameLine();
-                ImGui::PushItemWidth(category_select_column_width);
+                ImGui::PushItemWidth(category_group_select_column_width);
 
                 // note: make selection box not transparent
                 ImGui::PushStyleColor(ImGuiCol_PopupBg, ImGui::GetColorU32(combo_popup_background_color));
 
-                // note: color selection red if not found in category names
+                // note: color selection red if not found in category_group names
                 ImVec4 frame_bg_color = ImGui::GetStyleColorVec4(ImGuiCol_FrameBg);
                 bool found = false;
                 char space[] = " ";
                 if(!char_compare(trans->selection, space)){
-                    CategoryGroup* category = pm->month_categories;
+                    CategoryGroup* category_group = pm->month_categories;
                     for(s32 c_idx = 0; c_idx < pm->categories_count && !found; ++c_idx){
-                        category = category->next;
+                        category_group = category_group->next;
 
-                        Row* row = category->rows;
-                        for(s32 r_idx = 0; r_idx < category->row_count && !found; ++r_idx){
+                        Row* row = category_group->rows;
+                        for(s32 r_idx = 0; r_idx < category_group->row_count && !found; ++r_idx){
                             row = row->next;
                             String8 trans_selection = str8(trans->selection, char_length(trans->selection));
 
-                            String8 cat_part = str8_format(tm->frame_arena, "%s: ", category->name);
+                            String8 cat_part = str8_format(tm->frame_arena, "%s: ", category_group->name);
                             String8 name_part = str8(row->name, char_length(row->name));
                             String8 cat_row_name = str8_concatenate(tm->frame_arena, cat_part, name_part);
 
@@ -2111,7 +2111,7 @@ draw_entire_ui(void){
                 //           I don't remember why I did some of this stuff.
                 // note: populate selection box with options.
                 s32 color_idx = 0;
-                String8 combo_id = str8_formatted(scratch.arena, "##category_select%i", t_idx);
+                String8 combo_id = str8_formatted(scratch.arena, "##category_group_select%i", t_idx);
                 if(ImGui::BeginCombo((char*)combo_id.data, trans->selection, ImGuiComboFlags_HeightLarge)){
                     for (int n = 0; n < pm->selection_count; n++){
                         String8 selection_item = pm->selection_list[n];
@@ -2161,7 +2161,7 @@ draw_entire_ui(void){
             ImGui::SameLine();
             ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + plus_expense_column_start - minus_padding - minus_padding);
             ImGui::PushFont(my_font12);
-            fmt = str8_fmt(tm->frame_arena, "%c##apply_category_to_all", icon_lookup[Icon_Check]);
+            fmt = str8_fmt(tm->frame_arena, "%c##apply_category_group_to_all", icon_lookup[Icon_Check]);
             // INCOMPLETE : this is the slow solution but just to see if it works
             if(ImGui::Button((char*)fmt.str)){
 				String8 trans_selection = str8(trans->selection, char_length(trans->selection));
@@ -2186,7 +2186,7 @@ draw_entire_ui(void){
                 }
             }
             ImGui::PopFont();
-            tooltip(str8_literal("Apply category to the current month.\nThis is based on matching transaction descriptions"));
+            tooltip(str8_literal("Apply category_group to the current month.\nThis is based on matching transaction descriptions"));
 
             ImGui::SameLine();
             ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + x_expense_column_start - minus_padding);
@@ -2235,12 +2235,12 @@ collect_totals_for_months(void){
         MonthInfo* month = pm->year->months + m_idx;
 
         // note: collect row->spent from transactions
-        CategoryGroup* category = pm->month_categories;
+        CategoryGroup* category_group = pm->month_categories;
         for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
-            category = category->next;
+            category_group = category_group->next;
 
-            Row* row = category->rows;
-            for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
+            Row* row = category_group->rows;
+            for(s32 r_idx = 0; r_idx < category_group->row_count; ++r_idx){
                 row = row->next;
                 row->spent = 0;
 
@@ -2253,7 +2253,7 @@ collect_totals_for_months(void){
                             String8 trans_selection = str8(trans->selection, t_length);
 
                             u32 r_length = char_length(row->name);
-                            String8 cat_part = str8_format(tm->frame_arena, "%s: ", category->name);
+                            String8 cat_part = str8_format(tm->frame_arena, "%s: ", category_group->name);
                             String8 name_part = str8(row->name, r_length);
                             String8 full = str8_concatenate(tm->frame_arena, cat_part, name_part);
                             if(str8_compare(full, trans_selection)){
@@ -2271,33 +2271,33 @@ collect_totals_for_months(void){
         f32 month_total_planned = 0.0f;
         f32 month_total_spent = 0.0f;
         f32 month_total_diff = 0.0f;
-        category = pm->month_categories;
+        category_group = pm->month_categories;
         for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
-            category = category->next;
+            category_group = category_group->next;
 
-            category->planned = 0;
-            category->spent = 0;
-            category->diff = 0;
+            category_group->planned = 0;
+            category_group->spent = 0;
+            category_group->diff = 0;
 
-            Row* row = category->rows;
-            for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
+            Row* row = category_group->rows;
+            for(s32 r_idx = 0; r_idx < category_group->row_count; ++r_idx){
                 row = row->next;
                 if(!row->muted){
                     row->diff = atof(row->planned) - row->spent;
                     row->diff = round_to_hundredth(row->diff);
 
-                    category->planned += atof(row->planned);
-                    category->spent += row->spent;
-                    category->diff += row->diff;
+                    category_group->planned += atof(row->planned);
+                    category_group->spent += row->spent;
+                    category_group->diff += row->diff;
                 }
             }
-            category->planned = round_to_hundredth(category->planned);
-            category->spent  = round_to_hundredth(category->spent);
-            category->diff    = round_to_hundredth(category->diff);
-            if(!category->muted){
-                month_total_planned += category->planned;
-                month_total_spent   += category->spent;
-                month_total_diff    += category->diff;
+            category_group->planned = round_to_hundredth(category_group->planned);
+            category_group->spent  = round_to_hundredth(category_group->spent);
+            category_group->diff    = round_to_hundredth(category_group->diff);
+            if(!category_group->muted){
+                month_total_planned += category_group->planned;
+                month_total_spent   += category_group->spent;
+                month_total_diff    += category_group->diff;
             }
         }
         if(!month->muted){
@@ -2405,12 +2405,12 @@ collect_totals_for_months(void){
 
     {
         // note: calculate selected months row->spent
-        CategoryGroup* category = pm->month_categories;
+        CategoryGroup* category_group = pm->month_categories;
         for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
-            category = category->next;
+            category_group = category_group->next;
 
-            Row* row = category->rows;
-            for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
+            Row* row = category_group->rows;
+            for(s32 r_idx = 0; r_idx < category_group->row_count; ++r_idx){
                 row = row->next;
                 row->spent = 0;
 
@@ -2424,7 +2424,7 @@ collect_totals_for_months(void){
                             String8 trans_selection = str8(trans->selection, t_length);
 
                             u32 r_length = char_length(row->name);
-                            String8 cat_part = str8_format(tm->frame_arena, "%s: ", category->name);
+                            String8 cat_part = str8_format(tm->frame_arena, "%s: ", category_group->name);
                             String8 name_part = str8(row->name, r_length);
                             String8 full = str8_concatenate(tm->frame_arena, cat_part, name_part);
                             if(str8_compare(full, trans_selection)){
@@ -2442,33 +2442,33 @@ collect_totals_for_months(void){
         f32 month_total_planned = 0.0f;
         f32 month_total_spent = 0.0f;
         f32 month_total_diff = 0.0f;
-        category = pm->month_categories;
+        category_group = pm->month_categories;
         for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
-            category = category->next;
+            category_group = category_group->next;
 
-            category->planned = 0;
-            category->spent = 0;
-            category->diff = 0;
+            category_group->planned = 0;
+            category_group->spent = 0;
+            category_group->diff = 0;
 
-            Row* row = category->rows;
-            for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
+            Row* row = category_group->rows;
+            for(s32 r_idx = 0; r_idx < category_group->row_count; ++r_idx){
                 row = row->next;
                 if(!row->muted){
                     row->diff = atof(row->planned) - row->spent;
                     row->diff = round_to_hundredth(row->diff);
 
-                    category->planned += atof(row->planned);
-                    category->spent += row->spent;
-                    category->diff += row->diff;
+                    category_group->planned += atof(row->planned);
+                    category_group->spent += row->spent;
+                    category_group->diff += row->diff;
                 }
             }
-            category->planned = round_to_hundredth(category->planned);
-            category->spent  = round_to_hundredth(category->spent);
-            category->diff    = round_to_hundredth(category->diff);
-            if(!category->muted){
-                month_total_planned += category->planned;
-                month_total_spent  += category->spent;
-                month_total_diff    += category->diff;
+            category_group->planned = round_to_hundredth(category_group->planned);
+            category_group->spent  = round_to_hundredth(category_group->spent);
+            category_group->diff    = round_to_hundredth(category_group->diff);
+            if(!category_group->muted){
+                month_total_planned += category_group->planned;
+                month_total_spent  += category_group->spent;
+                month_total_diff    += category_group->diff;
             }
         }
         MonthInfo* month = pm->year->months + pm->month_tab_idx;
@@ -2479,21 +2479,21 @@ collect_totals_for_months(void){
         month->totals.goal    = round_to_hundredth(atof(pm->budget) - month->totals.planned);
     }
 
-    // note mute/unmute category based on rows muted.
-    CategoryGroup* category = pm->month_categories;
+    // note mute/unmute category_group based on rows muted.
+    CategoryGroup* category_group = pm->month_categories;
     for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
-        category = category->next;
+        category_group = category_group->next;
 
         bool all_muted = true;
-        Row* row = category->rows;
-        for(s32 r_idx = 0; r_idx < category->row_count; ++r_idx){
+        Row* row = category_group->rows;
+        for(s32 r_idx = 0; r_idx < category_group->row_count; ++r_idx){
             row = row->next;
             if(!row->muted){
                 all_muted = false;
             }
         }
 
-        category->muted = all_muted;
+        category_group->muted = all_muted;
     }
 
     // note mute/unmute months based on transactions muted.
@@ -2631,32 +2631,29 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
         tm->frame_arena = push_arena(&tm->arena, MB(100));
         tm->options_arena = push_arena(&tm->arena, MB(100));
-        //tm->category_table_arena = push_arena(&tm->arena, MB(100));
-
-        //table_init(tm->category_table_arena, &pm->category_table, MAX_TRANSACTION_COUNT);
 
         // create pools
-        pm->category_pool    = push_pool(&pm->arena, sizeof(CategoryGroup), MAX_CATEGORY_GROUP_COUNT);
-        pm->row_pool         = push_pool(&pm->arena, sizeof(Row), MAX_ROW_COUNT);
-        pm->transaction_pool = push_pool(&pm->arena, sizeof(Transaction), MAX_TRANSACTION_COUNT);
-        pm->csv_profile_pool = push_pool(&pm->arena, sizeof(CSV_Profile), MAX_PROFILE_COUNT);
+        pm->category_group_pool = push_pool(&pm->arena, sizeof(CategoryGroup), MAX_CATEGORY_GROUP_COUNT);
+        pm->row_pool            = push_pool(&pm->arena, sizeof(Row), MAX_ROW_COUNT);
+        pm->transaction_pool    = push_pool(&pm->arena, sizeof(Transaction), MAX_TRANSACTION_COUNT);
+        pm->csv_profile_pool    = push_pool(&pm->arena, sizeof(CSV_Profile), MAX_PROFILE_COUNT);
         // todo(rr): maybe I can just use scratch memory? I don't think I need this
-        pm->data_arena       = push_arena(&pm->arena, MB(1));
+        pm->data_arena          = push_arena(&pm->arena, MB(1));
 
         // setup free list from pools
-        pool_free_all(pm->category_pool);
+        pool_free_all(pm->category_group_pool);
         pool_free_all(pm->row_pool);
         pool_free_all(pm->transaction_pool);
         pool_free_all(pm->csv_profile_pool);
 
         // setup sentinel node for categories
-        pm->month_categories = (CategoryGroup*)pool_next(pm->category_pool);
+        pm->month_categories = (CategoryGroup*)pool_next(pm->category_group_pool);
         dll_clear(pm->month_categories);
-        pm->quarter_categories = (CategoryGroup*)pool_next(pm->category_pool);
+        pm->quarter_categories = (CategoryGroup*)pool_next(pm->category_group_pool);
         dll_clear(pm->quarter_categories);
-        pm->biannual_categories = (CategoryGroup*)pool_next(pm->category_pool);
+        pm->biannual_categories = (CategoryGroup*)pool_next(pm->category_group_pool);
         dll_clear(pm->biannual_categories);
-        pm->annual_categories = (CategoryGroup*)pool_next(pm->category_pool);
+        pm->annual_categories = (CategoryGroup*)pool_next(pm->category_group_pool);
         dll_clear(pm->annual_categories);
         pm->csv_profiles = (CSV_Profile*)pool_next(pm->csv_profile_pool);
         dll_clear(pm->csv_profiles);
