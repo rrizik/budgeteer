@@ -703,7 +703,7 @@ draw_entire_ui(void){
             ImGui::Text("#");
             ImGui::SameLine();
             ImGui::SetCursorPosX(category_column_start);
-            ImGui::Text("Category");
+            ImGui::Text("Category Group");
             ImGui::SameLine();
             ImGui::SetCursorPosX(planned_column_start);
             ImGui::Text("Planned");
@@ -716,8 +716,8 @@ draw_entire_ui(void){
             ImGui::SameLine();
             ImGui::SetCursorPosX(plus_column_start);
             if(ImGui::Button("+##add_category_button")){
-                if(pm->categories_count < MAX_CATEGORY_COUNT){
-                    Category* category = (Category*)pool_next(pm->category_pool);
+                if(pm->categories_count < MAX_CATEGORY_GROUP_COUNT){
+                    CategoryGroup* category = (CategoryGroup*)pool_next(pm->category_pool);
                     dll_push_back(pm->month_categories, category);
                     category->rows = (Row*)pool_next(pm->row_pool);
                     dll_clear(category->rows);
@@ -728,10 +728,10 @@ draw_entire_ui(void){
                     // todo(rr): STATUSBAR ERROR
                 }
             }
-            tooltip(str8_literal("Add New Category."));
+            tooltip(str8_literal("Add New Category Group."));
 
             //note: popluate empty planned with 0's for visual appeal
-            Category* category = pm->month_categories;
+            CategoryGroup* category = pm->month_categories;
             for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
                 category = category->next;
 
@@ -770,7 +770,7 @@ draw_entire_ui(void){
                 }
                 ImGui::PopFont();
 
-                tooltip(str8_literal("Collapse/Expand Or Drag/Swap Category."));
+                tooltip(str8_literal("Collapse/Expand Or Drag/Swap Category Group."));
                 ImGui::PopID();
 
                 if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)){
@@ -783,11 +783,11 @@ draw_entire_ui(void){
                         s32* payload_data = (s32*)payload->Data;
                         s32 from_idx = *payload_data;
                         if(from_idx != c_idx){
-                            Category* c = pm->month_categories;
+                            CategoryGroup* c = pm->month_categories;
                             for(s32 i=0; i <= from_idx; ++i){
                                 c = c->next;
                             }
-                            dll_swap(c, category, Category);
+                            dll_swap(c, category, CategoryGroup);
                         }
                     }
                     ImGui::EndDragDropTarget();
@@ -849,7 +849,7 @@ draw_entire_ui(void){
                         // todo(rr): STATUSBAR ERROR
                     }
                 }
-                tooltip(str8_literal("Add New Sub-Category."));
+                tooltip(str8_literal("Add New Category."));
                 ImGui::PopID();
 
                 ImGui::SameLine();
@@ -917,7 +917,7 @@ draw_entire_ui(void){
                             ImGui::Text("%s", row->name);
                             ImGui::EndDragDropSource();
                         }
-                        tooltip(str8_literal("Drag/Swap Sub-Category."));
+                        tooltip(str8_literal("Drag/Swap Category."));
 
                         if(ImGui::BeginDragDropTarget()){
                             if(const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DRAG_ROW")){
@@ -980,7 +980,7 @@ draw_entire_ui(void){
                             dll_remove(row);
                             pool_free(pm->row_pool, row);
                         }
-                        tooltip(str8_literal("Delete Sub-Category."));
+                        tooltip(str8_literal("Delete Category."));
                         ImGui::PopID();
 
                         ImGui::SameLine();
@@ -997,7 +997,7 @@ draw_entire_ui(void){
                         if(ImGui::Button("m##mute_row")){
                             row->muted = !row->muted;
                         }
-                        tooltip(str8_literal("Mute Sub-Category."));
+                        tooltip(str8_literal("Mute Category."));
                         ImGui::PopID();
                         ImGui::PopStyleColor(2);
                     }
@@ -1029,7 +1029,7 @@ draw_entire_ui(void){
             ImGui::Text("#");
             ImGui::SameLine();
             ImGui::SetCursorPosX(category_column_start);
-            ImGui::Text("Q1 Category");
+            ImGui::Text("Q1 CategoryGroup");
             ImGui::SameLine();
             ImGui::SetCursorPosX(planned_column_start);
             ImGui::Text("Planned");
@@ -1042,14 +1042,14 @@ draw_entire_ui(void){
             ImGui::SameLine();
             ImGui::SetCursorPosX(plus_column_start);
             if(ImGui::Button("+##add_quarter_category_button")){
-                //Category* category = (Category*)pool_next(pm->category_pool);
+                //CategoryGroup* category = (CategoryGroup*)pool_next(pm->category_pool);
                 //dll_push_back(pm->quarter_categories, category);
                 //category->rows = (Row*)pool_next(pm->row_pool);
                 //dll_clear(category->rows);
 
                 //pm->quarter_categories_count++;
             }
-            tooltip(str8_literal("Add New Category."));
+            tooltip(str8_literal("Add New Category Group."));
         }
         custom_separator();
 
@@ -1076,7 +1076,7 @@ draw_entire_ui(void){
             ImGui::Text("#");
             ImGui::SameLine();
             ImGui::SetCursorPosX(category_column_start);
-            ImGui::Text("Q1 Category");
+            ImGui::Text("Q1 CategoryGroup");
             ImGui::SameLine();
             ImGui::SetCursorPosX(planned_column_start);
             ImGui::Text("Planned");
@@ -1089,14 +1089,14 @@ draw_entire_ui(void){
             ImGui::SameLine();
             ImGui::SetCursorPosX(plus_column_start);
             if(ImGui::Button("+##add_biannual_category_button")){
-                //Category* category = (Category*)pool_next(pm->category_pool);
+                //CategoryGroup* category = (CategoryGroup*)pool_next(pm->category_pool);
                 //dll_push_back(pm->biannual_categories, category);
                 //category->rows = (Row*)pool_next(pm->row_pool);
                 //dll_clear(category->rows);
 
                 //pm->biannual_categories_count++;
             }
-            tooltip(str8_literal("Add New Category."));
+            tooltip(str8_literal("Add New Category Group."));
         }
         custom_separator();
 
@@ -1123,7 +1123,7 @@ draw_entire_ui(void){
             ImGui::Text("#");
             ImGui::SameLine();
             ImGui::SetCursorPosX(category_column_start);
-            ImGui::Text("Q1 Category");
+            ImGui::Text("Q1 CategoryGroup");
             ImGui::SameLine();
             ImGui::SetCursorPosX(planned_column_start);
             ImGui::Text("Planned");
@@ -1136,16 +1136,16 @@ draw_entire_ui(void){
             ImGui::SameLine();
             ImGui::SetCursorPosX(plus_column_start);
             if(ImGui::Button("+##add_annual_category_button")){
-                //Category* category = (Category*)pool_next(pm->category_pool);
+                //CategoryGroup* category = (CategoryGroup*)pool_next(pm->category_pool);
                 //dll_push_back(pm->annual_categories, category);
                 //category->rows = (Row*)pool_next(pm->row_pool);
                 //dll_clear(category->rows);
 
                 //pm->annual_categories_count++;
             }
-            tooltip(str8_literal("Add New Category."));
+            tooltip(str8_literal("Add New Category Group."));
 
-            //Category* category = pm->annual_categories;
+            //CategoryGroup* category = pm->annual_categories;
             //for(s32 c_idx = 0; c_idx < pm->annual_categories_count; ++c_idx){
             //    category = category->next;
 
@@ -1164,7 +1164,7 @@ draw_entire_ui(void){
             //        }
             //    }
             //    ImGui::PopID();
-            //    tooltip(str8_literal("Collapse/Expand Or Drag/Swap Category."));
+            //    tooltip(str8_literal("Collapse/Expand Or Drag/Swap Category Group."));
 
             //    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)){
             //        ImGui::SetDragDropPayload("DRAG_ROW", &c_idx, sizeof(s32));
@@ -1176,11 +1176,11 @@ draw_entire_ui(void){
             //            s32* payload_data = (s32*)payload->Data;
             //            s32 from_idx = *payload_data;
             //            if(from_idx != c_idx){
-            //                Category* c = pm->categories;
+            //                CategoryGroup* c = pm->categories;
             //                for(s32 i=0; i <= from_idx; ++i){
             //                    c = c->next;
             //                }
-            //                dll_swap(c, category, Category);
+            //                dll_swap(c, category, CategoryGroup);
             //            }
             //        }
             //        ImGui::EndDragDropTarget();
@@ -1986,7 +1986,7 @@ draw_entire_ui(void){
         {
             // note: collect selection options
             pm->selection_count = 1;
-            Category* category = pm->month_categories;
+            CategoryGroup* category = pm->month_categories;
             for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
                 category = category->next;
 
@@ -2079,7 +2079,7 @@ draw_entire_ui(void){
                 bool found = false;
                 char space[] = " ";
                 if(!char_compare(trans->selection, space)){
-                    Category* category = pm->month_categories;
+                    CategoryGroup* category = pm->month_categories;
                     for(s32 c_idx = 0; c_idx < pm->categories_count && !found; ++c_idx){
                         category = category->next;
 
@@ -2235,7 +2235,7 @@ collect_totals_for_months(void){
         MonthInfo* month = pm->year->months + m_idx;
 
         // note: collect row->spent from transactions
-        Category* category = pm->month_categories;
+        CategoryGroup* category = pm->month_categories;
         for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
             category = category->next;
 
@@ -2405,7 +2405,7 @@ collect_totals_for_months(void){
 
     {
         // note: calculate selected months row->spent
-        Category* category = pm->month_categories;
+        CategoryGroup* category = pm->month_categories;
         for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
             category = category->next;
 
@@ -2480,7 +2480,7 @@ collect_totals_for_months(void){
     }
 
     // note mute/unmute category based on rows muted.
-    Category* category = pm->month_categories;
+    CategoryGroup* category = pm->month_categories;
     for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
         category = category->next;
 
@@ -2631,12 +2631,12 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
         tm->frame_arena = push_arena(&tm->arena, MB(100));
         tm->options_arena = push_arena(&tm->arena, MB(100));
-        tm->category_table_arena = push_arena(&tm->arena, MB(100));
+        //tm->category_table_arena = push_arena(&tm->arena, MB(100));
 
         //table_init(tm->category_table_arena, &pm->category_table, MAX_TRANSACTION_COUNT);
 
         // create pools
-        pm->category_pool    = push_pool(&pm->arena, sizeof(Category), MAX_CATEGORY_COUNT);
+        pm->category_pool    = push_pool(&pm->arena, sizeof(CategoryGroup), MAX_CATEGORY_GROUP_COUNT);
         pm->row_pool         = push_pool(&pm->arena, sizeof(Row), MAX_ROW_COUNT);
         pm->transaction_pool = push_pool(&pm->arena, sizeof(Transaction), MAX_TRANSACTION_COUNT);
         pm->csv_profile_pool = push_pool(&pm->arena, sizeof(CSV_Profile), MAX_PROFILE_COUNT);
@@ -2650,13 +2650,13 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         pool_free_all(pm->csv_profile_pool);
 
         // setup sentinel node for categories
-        pm->month_categories = (Category*)pool_next(pm->category_pool);
+        pm->month_categories = (CategoryGroup*)pool_next(pm->category_pool);
         dll_clear(pm->month_categories);
-        pm->quarter_categories = (Category*)pool_next(pm->category_pool);
+        pm->quarter_categories = (CategoryGroup*)pool_next(pm->category_pool);
         dll_clear(pm->quarter_categories);
-        pm->biannual_categories = (Category*)pool_next(pm->category_pool);
+        pm->biannual_categories = (CategoryGroup*)pool_next(pm->category_pool);
         dll_clear(pm->biannual_categories);
-        pm->annual_categories = (Category*)pool_next(pm->category_pool);
+        pm->annual_categories = (CategoryGroup*)pool_next(pm->category_pool);
         dll_clear(pm->annual_categories);
         pm->csv_profiles = (CSV_Profile*)pool_next(pm->csv_profile_pool);
         dll_clear(pm->csv_profiles);

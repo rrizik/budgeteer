@@ -134,9 +134,9 @@ typedef struct Row{
 } Row;
 
 #define CAT_NAME_SIZE 128
-typedef struct Category{
-    Category* next;
-    Category* prev;
+typedef struct CategoryGroup{
+    CategoryGroup* next;
+    CategoryGroup* prev;
     Row* rows;
 
     char name[CAT_NAME_SIZE];
@@ -147,7 +147,7 @@ typedef struct Category{
     u32 row_count;
     bool draw_rows;
     bool muted;
-} Category;
+} CategoryGroup;
 
 #define TRANS_DATE_SIZE 128
 #define TRANS_AMOUNT_SIZE 128
@@ -248,7 +248,7 @@ typedef struct CSV_Profile{
 } CSV_Profile;
 
 #define SELECTION_SIZE 128
-#define MAX_CATEGORY_COUNT 256
+#define MAX_CATEGORY_GROUP_COUNT 256
 #define MAX_ROW_COUNT 2048
 #define MAX_TRANSACTION_COUNT 32768
 #define MAX_PROFILE_COUNT 32
@@ -265,10 +265,10 @@ typedef struct PermanentMemory{
     //HashTable category_table;
 
     // category/rows/months/transactions
-    Category* annual_categories;
-    Category* biannual_categories;
-    Category* quarter_categories;
-    Category* month_categories;
+    CategoryGroup* annual_categories;
+    CategoryGroup* biannual_categories;
+    CategoryGroup* quarter_categories;
+    CategoryGroup* month_categories;
 
     // Years are setup where 0 == current year, -1 == current year - 1, 1 == current year + 1
     Year years[MAX_YEAR_COUNT];
@@ -343,7 +343,7 @@ typedef struct TransientMemory{
     Arena arena;
     Arena *frame_arena;
     Arena *options_arena;
-    Arena *category_table_arena;
+    //Arena *category_table_arena;
 
 } TransientMemory;
 global TransientMemory* tm;
@@ -658,7 +658,7 @@ str8_eat_word_csv(String8* string){
 typedef enum BudgetParsingState{
     BudgetParsingState_None,
     BudgetParsingState_Budget,
-    BudgetParsingState_Category,
+    BudgetParsingState_CategoryGroup,
     BudgetParsingState_Row,
 
     BudgetParsingState_Count,
@@ -1551,7 +1551,7 @@ deserialize_budget(void){
                 bps = BudgetParsingState_Budget;
             }
             else if(str8_compare(line, str8_literal("#category\n"))){
-                bps = BudgetParsingState_Category;
+                bps = BudgetParsingState_CategoryGroup;
             }
         }
         else if(bps == BudgetParsingState_Budget){
@@ -1570,8 +1570,8 @@ deserialize_budget(void){
                 }
             }
         }
-        else if(bps == BudgetParsingState_Category){
-            Category* category = (Category*)pool_next(pm->category_pool);
+        else if(bps == BudgetParsingState_CategoryGroup){
+            CategoryGroup* category = (CategoryGroup*)pool_next(pm->category_pool);
             dll_push_back(pm->month_categories, category);
             category->rows = (Row*)pool_next(pm->row_pool);
             dll_clear(category->rows);
@@ -1602,7 +1602,7 @@ deserialize_budget(void){
             bps = BudgetParsingState_Row;
         }
         else if(bps == BudgetParsingState_Row){
-            Category* category = pm->month_categories->prev;
+            CategoryGroup* category = pm->month_categories->prev;
             ++category->row_count;
 
             Row* row = (Row*)pool_next(pm->row_pool);
@@ -1642,7 +1642,7 @@ deserialize_budget(void){
 static void
 serialize_budget(void){
     Arena* arena = pm->data_arena;
-    Category* c = pm->month_categories;
+    CategoryGroup* c = pm->month_categories;
 
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#budget\n");
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "budget=%i\n", atoi(pm->budget));
