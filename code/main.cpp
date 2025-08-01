@@ -1,4 +1,4 @@
-#include "main.hpp"
+#include "main.h"
 
 static void
 initialize_years_and_transactions(void){
@@ -6,11 +6,11 @@ initialize_years_and_transactions(void){
     struct tm *tm_info = localtime(&t);
     pm->current_year = tm_info->tm_year + 1900;
 
-    if(!year_config_deserialized){
+    if(!config_year_idx_deserialized){
         pm->year_idx = 0;
     }
 
-    // setup year numbers
+    // Setup year numbers before and after current year.
     for(s32 idx=0; idx < MAX_YEAR_COUNT/2; ++idx){
         Year* year = pm->years + idx;
         year->number = pm->current_year + idx;
@@ -23,7 +23,7 @@ initialize_years_and_transactions(void){
     for(s32 idx=0; idx < MAX_YEAR_COUNT; ++idx){
         Year* year = pm->years + idx;
 
-        // setup sentinel node for month transactions
+        // Setup sentinel nodes for month transactions.
         for(s32 i=0; i < Month_Count; ++i){
             MonthInfo* month = year->months + i;
             month->transactions = (Transaction*)pool_next(pm->transaction_pool);
@@ -1738,6 +1738,33 @@ draw_entire_ui(void){
         }
         tooltip(str8_literal("Delete all transactions for all the year"));
 
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + plus_expense_column_start - minus_padding - minus_padding);
+        ImGui::PushFont(my_font12);
+        fmt = str8_fmt(tm->frame_arena, "%c##apply_category_to_all", icon_lookup[Icon_Check]);
+        // INCOMPLETE : this is the slow solution but just to see if it works
+        if(ImGui::Button((char*)fmt.str)){
+            //String8 trans_selection = str8(trans->selection, char_length(trans->selection));
+            //String8 trans_desc = str8(trans->description, char_length(trans->description));
+
+            Year* y = pm->year;
+            for(s32 y_idx=0; y_idx < Month_Count; ++y_idx){
+                MonthInfo* m = y->months + y_idx;
+                Transaction* t = m->transactions;
+
+                for(s32 z_idx=0; z_idx < m->transaction_count; ++z_idx){
+                    t = t->next;
+                    String8 inner_trans_desc = str8(t->description, char_length(t->description));
+
+                    //if(str8_compare(trans_desc, inner_trans_desc)){
+                        //copy_str8_to_char(t->selection, trans_selection, TRANS_SELECTION_SIZE);
+                    //}
+                }
+            }
+        }
+        ImGui::PopFont();
+        tooltip(str8_literal("Apply categories to the entire year.\nThis is based on matching transaction descriptions"));
+
         if(ImGui::BeginTabBar("##Month", ImGuiTabBarFlags_None)){
 
             ImGui::PushStyleColor(ImGuiCol_TabActive, active_color);
@@ -1806,6 +1833,7 @@ draw_entire_ui(void){
             ImGui::PopStyleColor(2);
             ImGui::EndTabBar();
         }
+        // HERE2
 
 
         ImGui::Spacing();
@@ -1987,7 +2015,6 @@ draw_entire_ui(void){
         // note: render transactions
         ImGui::BeginChild("transactions_child", ImVec2(0, 0), true, 0);
         trans = month->transactions;
-        f32 minus_padding = 8;
         for(s32 t_idx=0; t_idx < month->transaction_count; ++t_idx){
             trans = trans->next;
 
@@ -2081,8 +2108,8 @@ draw_entire_ui(void){
                 ImGui::PushStyleColor(ImGuiCol_FrameBg, ImGui::GetColorU32(frame_bg_color));
 
                 // todo(rr): leave comments on this combo box explaing some things.
-                //           I don't remember why I did some of he things
-                // note: populate selection box with options
+                //           I don't remember why I did some of this stuff.
+                // note: populate selection box with options.
                 s32 color_idx = 0;
                 String8 combo_id = str8_formatted(scratch.arena, "##category_select%i", t_idx);
                 if(ImGui::BeginCombo((char*)combo_id.data, trans->selection, ImGuiComboFlags_HeightLarge)){
@@ -2129,6 +2156,37 @@ draw_entire_ui(void){
                 ImGui::PopStyleColor(2);
                 ImGui::PopItemWidth();
             }
+
+            // NOTE: HERE
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + plus_expense_column_start - minus_padding - minus_padding);
+            ImGui::PushFont(my_font12);
+            fmt = str8_fmt(tm->frame_arena, "%c##apply_category_to_all", icon_lookup[Icon_Check]);
+            // INCOMPLETE : this is the slow solution but just to see if it works
+            if(ImGui::Button((char*)fmt.str)){
+				String8 trans_selection = str8(trans->selection, char_length(trans->selection));
+				String8 trans_desc = str8(trans->description, char_length(trans->description));
+
+                for(s32 x_idx=0; x_idx < MAX_YEAR_COUNT; ++x_idx){
+                    Year* y = pm->years + x_idx;
+
+                    for(s32 y_idx=0; y_idx < Month_Count; ++y_idx){
+                        MonthInfo* m = y->months + y_idx;
+                        Transaction* t = m->transactions;
+
+						for(s32 z_idx=0; z_idx < m->transaction_count; ++z_idx){
+							t = t->next;
+                            String8 inner_trans_desc = str8(t->description, char_length(t->description));
+
+                            if(str8_compare(trans_desc, inner_trans_desc)){
+                                copy_str8_to_char(t->selection, trans_selection, TRANS_SELECTION_SIZE);
+                            }
+						}
+                    }
+                }
+            }
+            ImGui::PopFont();
+            tooltip(str8_literal("Apply category to the current month.\nThis is based on matching transaction descriptions"));
 
             ImGui::SameLine();
             ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + x_expense_column_start - minus_padding);
@@ -2473,7 +2531,7 @@ do_one_frame(void){
 
         if(event.type == EventType_KEYBOARD){
             if(event.keycode == KeyCode_ESCAPE){
-                //should_quit = true;
+                should_quit = true;
             }
         }
         if(event.type == EventType_QUIT){
@@ -2573,6 +2631,9 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
         tm->frame_arena = push_arena(&tm->arena, MB(100));
         tm->options_arena = push_arena(&tm->arena, MB(100));
+        tm->category_table_arena = push_arena(&tm->arena, MB(100));
+
+        //table_init(tm->category_table_arena, &pm->category_table, MAX_TRANSACTION_COUNT);
 
         // create pools
         pm->category_pool    = push_pool(&pm->arena, sizeof(Category), MAX_CATEGORY_COUNT);
@@ -2608,9 +2669,9 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
 
         // give selection list memory
         pm->selection_list = push_array(tm->options_arena, String8, MAX_SELECTION_LIST_COUNT);
-        for(s32 i=0; i < SELECTION_LIST_SIZE; ++i){
+        for(s32 i=0; i < MAX_SELECTION_LIST_COUNT; ++i){
             String8* option = pm->selection_list + i;
-            option->str = push_array(tm->options_arena, u8, 128);
+            option->str = push_array(tm->options_arena, u8, SELECTION_SIZE);
         }
         *pm->selection_list = str8(" \0", 2);
         pm->default_path = os_application_path(&pm->arena);

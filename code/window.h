@@ -1,5 +1,5 @@
-#ifndef GAME_HPP
-#define GAME_HPP
+#ifndef WINDOW_H
+#define WINDOW_H
 
 
 typedef enum WindowType{

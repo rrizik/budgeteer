@@ -18,12 +18,12 @@
 #define PROFILER_TIMER READ_TIMESTAMP_COUNTER
 #include "profiler.h"
 #define CLOCK_TIMER READ_TIMESTAMP_COUNTER
-#include "clock.hpp"
+#include "clock.h"
 
-#include "input.hpp"
-#include "window.hpp"
-#include "bitmap.hpp"
-#include "d3d11_init.hpp"
+#include "input.h"
+#include "window.h"
+#include "bitmap.h"
+#include "d3d11_init.h"
 #include <time.h>
 
 #include "clock.cpp"
@@ -247,7 +247,7 @@ typedef struct CSV_Profile{
     s32  date_format_idx;
 } CSV_Profile;
 
-#define SELECTION_LIST_SIZE 128
+#define SELECTION_SIZE 128
 #define MAX_CATEGORY_COUNT 256
 #define MAX_ROW_COUNT 2048
 #define MAX_TRANSACTION_COUNT 32768
@@ -261,6 +261,8 @@ typedef struct PermanentMemory{
     PoolArena* transaction_pool;
     PoolArena* csv_profile_pool;
     Arena* data_arena;
+
+    //HashTable category_table;
 
     // category/rows/months/transactions
     Category* annual_categories;
@@ -341,6 +343,7 @@ typedef struct TransientMemory{
     Arena arena;
     Arena *frame_arena;
     Arena *options_arena;
+    Arena *category_table_arena;
 
 } TransientMemory;
 global TransientMemory* tm;
@@ -696,7 +699,7 @@ global s32 window_x;
 global s32 window_y;
 global Rect window_restored_rect;
 global bool show_tooltips = true;
-global bool year_config_deserialized = false;
+global bool config_year_idx_deserialized = false;
 
 static void
 parse_day_month_year(Transaction* trans){
@@ -1284,7 +1287,7 @@ deserialize_config(void){
 
                     if(str8_compare(key, str8_literal("year_idx"))){
                         pm->year_idx = atoi((char*)value.str);
-                        year_config_deserialized = true;
+                        config_year_idx_deserialized = true;
                     }
                     else if(str8_compare(key, str8_literal("month_tab_idx"))){
                         pm->month_tab_idx = atoi((char*)value.str);
@@ -1363,13 +1366,14 @@ serialize_config(void){
     arena_free(pm->data_arena);
 }
 
+// Note: Deserializes year files based on year number. If the year file doesn't exist, return and go next.
 static void
 deserialize_year(Year* year){
     ScratchArena scratch = begin_scratch();
     String8 filename = str8_fmt(scratch.arena, "%04d.b", year->number);
     String8 full_path = str8_path_append(scratch.arena, saves_path, filename);
 
-    // todo(rr): I think I prefer this check to encapsulate the function on the outside, but I didn't want to create the file names twice. Maybe think of how you might want to change this, to maybe pass the filename in again
+    // todo(rr): I think I prefer this check to encapsulate the function on the outside, just create the path and check it out side the function. This should be called if we know we can serialize, and then it doesn't hide the check.
     if(!os_file_exists(saves_path, filename)){
         return;
     }
@@ -1729,4 +1733,6 @@ RGBA_1_to_255(RGBA color){
     };
     return(result);
 }
+
+f32 minus_padding = 8;
 #endif

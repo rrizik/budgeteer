@@ -27,12 +27,6 @@ s32 main(){
     File out = os_file_open(str8_lit("../code/meta.h"), GENERIC_WRITE, CREATE_ALWAYS);
     os_file_write(out, buff->base, buff->at);
 
-    // note(rr): not necessary since the program ends
-    os_file_close(in);
-    os_file_close(out);
-    end_scratch(scratch);
-
-
     //FILE* in = fopen("../code/test.ttf", "rb");
     //fseek(in, 0, SEEK_END);
     //int size = ftell(in);
