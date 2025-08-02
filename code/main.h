@@ -121,9 +121,9 @@ wrap_index(s32 idx, s32 size){
 
 #define ROW_NAME_SIZE 128
 #define ROW_PLANNED_SIZE 128
-typedef struct Row{
-    Row* next;
-    Row* prev;
+typedef struct Category{
+    Category* next;
+    Category* prev;
 
     char name[ROW_NAME_SIZE];
     char planned[ROW_PLANNED_SIZE];
@@ -131,28 +131,28 @@ typedef struct Row{
     f32 diff;
 
     bool muted;
-} Row;
+} Category;
 
 #define CAT_NAME_SIZE 128
 typedef struct CategoryGroup{
     CategoryGroup* next;
     CategoryGroup* prev;
-    Row* rows;
+    Category* categories;
 
     char name[CAT_NAME_SIZE];
     f32 planned; // todo(rr): this is considered a kind of cache, don't do this unless you actually need to
     f32 spent;
     f32 diff;
 
-    u32 row_count;
-    bool draw_rows;
+    u32 category_count;
+    bool draw_categories;
     bool muted;
 } CategoryGroup;
 
 #define TRANS_DATE_SIZE 128
 #define TRANS_AMOUNT_SIZE 128
 #define TRANS_DESCRIPTION_SIZE 1024
-#define TRANS_SELECTION_SIZE 128
+#define TRANS_GROUP_SIZE 128
 typedef struct Transaction{
     Transaction* next;
     Transaction* prev;
@@ -160,7 +160,7 @@ typedef struct Transaction{
     char date[TRANS_DATE_SIZE];
     char amount[TRANS_AMOUNT_SIZE];
     char description[TRANS_DESCRIPTION_SIZE];
-    char selection[TRANS_SELECTION_SIZE];
+    char group[TRANS_GROUP_SIZE];
 
     bool muted;
 } Transation;
@@ -244,29 +244,29 @@ typedef struct CSV_Profile{
     char amount[PROFILE_AMOUNT_SIZE];
     char description[PROFILE_DESCRIPTION_SIZE];
     char date_format[PROFILE_DATE_FORMAT_SIZE];
-    s32  date_format_idx;
+    s32  date_format_kind;
 } CSV_Profile;
 
-#define SELECTION_SIZE 128
+#define GROUP_SIZE 128
 #define MAX_CATEGORY_GROUP_COUNT 256
 #define MAX_ROW_COUNT 2048
 #define MAX_TRANSACTION_COUNT 32768
 #define MAX_PROFILE_COUNT 32
-#define MAX_SELECTION_LIST_COUNT 1024
+#define MAX_GROUP_LIST_COUNT 1024
 typedef struct PermanentMemory{
     // memory
     Arena arena;
     PoolArena* category_group_pool;
-    PoolArena* row_pool;
+    PoolArena* category_pool;
     PoolArena* transaction_pool;
     PoolArena* csv_profile_pool;
     Arena* data_arena;
 
-    // category_group/rows/months/transactions
-    CategoryGroup* annual_categories;
-    CategoryGroup* biannual_categories;
-    CategoryGroup* quarter_categories;
-    CategoryGroup* month_categories;
+    // category_group/categories/months/transactions
+    CategoryGroup* annual_category_groups;
+    CategoryGroup* biannual_category_groups;
+    CategoryGroup* quarter_category_groups;
+    CategoryGroup* month_category_groups;
 
     // Years are setup where 0 == current year, -1 == current year - 1, 1 == current year + 1
     Year years[MAX_YEAR_COUNT];
@@ -275,13 +275,13 @@ typedef struct PermanentMemory{
     s32 transaction_year;
     s32 current_year;
 
-    // todo(rr): review total_ for all
-    u32 total_rows_count;
-    u32 categories_count;
+    // todo(rr): Review totals for all.
+    u32 total_categories_count;
+    u32 category_groups_count;
     u32 transaction_count;
-    u32 quarter_categories_count;
-    u32 biannual_categories_count;
-    u32 annual_categories_count;
+    u32 quarter_category_groups_count;
+    u32 biannual_category_groups_count;
+    u32 annual_category_groups_count;
 
     // for creating the transaction selection list
     // todo(rr): just turn this into a list
@@ -369,10 +369,10 @@ static f32 totals_number_start = 75.0f;
 static f32 collapse_column_start = 30.0f;
 static f32 collapse_column_width = 25.0f;
 
-static f32 row_count_column_start = collapse_column_start + collapse_column_width;
-static f32 row_count_column_width = 25.0f;
+static f32 category_count_column_start = collapse_column_start + collapse_column_width;
+static f32 category_count_column_width = 25.0f;
 
-static f32 category_group_column_start = row_count_column_start + row_count_column_width;
+static f32 category_group_column_start = category_count_column_start + category_count_column_width;
 static f32 category_group_column_width = 100.0f;
 
 static f32 planned_column_start = category_group_column_start + category_group_column_width + 10.0f;
@@ -438,16 +438,17 @@ dll_bubble_sort_amount(Transaction* sentinel, bool ascending=false){
         Transaction* current = sentinel->next;
         Transaction* next = sentinel->next->next;
         while(next != sentinel){
-            s32 result = strcmp(current->amount, next->amount);
+            f64 left = strtod((char*)current->amount, 0);
+            f64 right = strtod((char*)next->amount, 0);
 
-            if(ascending && result > 0){
+            if(ascending && left > right){
                 dll_swap(current, next, Transaction);
                 Transaction* tmp = current;
                 current = next;
                 next = tmp;
                 no_swaps = true;
             }
-            else if(!ascending && result < 0){
+            else if(!ascending && right > left){
                 dll_swap(current, next, Transaction);
                 Transaction* tmp = current;
                 current = next;
@@ -510,8 +511,8 @@ dll_insertion_sort(Transaction* sentinel){
 
         // find the insertion point
         Transaction* insertion = sentinel->next;
-        s32 r = strcmp(current->date, insertion->date);
-        while(insertion != sentinel && r > 0){
+        s32 result = strcmp(current->date, insertion->date);
+        while(insertion != sentinel && result > 0){
             insertion = insertion->next;
         }
 
@@ -656,7 +657,7 @@ typedef enum BudgetParsingState{
     BudgetParsingState_None,
     BudgetParsingState_Budget,
     BudgetParsingState_CategoryGroup,
-    BudgetParsingState_Row,
+    BudgetParsingState_Category,
 
     BudgetParsingState_Count,
 } BudgetParsingState;
@@ -703,12 +704,12 @@ parse_day_month_year(Transaction* trans){
     ScratchArena scratch = begin_scratch();
 
     CSV_Profile* profile = pm->csv_profile;
-    char delimiter = date_delimiters[profile->date_format_idx];
+    char delimiter = date_delimiters[profile->date_format_kind];
     String8 transaction_date = str8_cstring(trans->date);
     String8Node* date_parts = str8_split(scratch.arena, transaction_date, delimiter);
 
     //String8 dd, mm, yyyy;
-    switch(profile->date_format_idx){
+    switch(profile->date_format_kind){
         case Format_Kind_MMDDYYYY_Dash:
         case Format_Kind_MMDDYYYY_Forward_Slash:{
             str8_copy(&pm->mm,   &date_parts->next->str);
@@ -748,36 +749,37 @@ parse_day_month_year(Transaction* trans){
     end_scratch(scratch);
 }
 
-static Year*
-set_year_based_on_date(){
-    Year* year;
-    bool found = false;
-    for(s32 i=0; i < MAX_YEAR_COUNT; ++i){
-        year = pm->years + i;
-        if(pm->yyyy_s32 == year->number){
-            pm->year = pm->years + i;
-            //pm->year_idx = i;
-            found = true;
-            break;
-        }
-    }
-    if(!found){
-        year = 0;
-    }
-    return(year);
-}
+// cleanup: Remove this once you are sure.
+//static Year*
+//set_year_based_on_date(){
+//    Year* year;
+//    bool found = false;
+//    for(s32 i=0; i < MAX_YEAR_COUNT; ++i){
+//        year = pm->years + i;
+//        if(pm->yyyy_s32 == year->number){
+//            pm->year = pm->years + i;
+//            found = true;
+//            break;
+//        }
+//    }
+//    if(!found){
+//        year = 0;
+//    }
+//    return(year);
+//}
 
-static MonthInfo*
-set_month_based_on_date(){
-    MonthInfo* month;
-    for(s32 i=1; i < Month_Count + 1; ++i){
-        if(pm->mm_s32 == i){
-            month = pm->year->months + i - 1;
-            break;
-        }
-    }
-    return(month);
-}
+// cleanup: Remove this once you are sure.
+//static MonthInfo*
+//set_month_based_on_date(){
+//    MonthInfo* month;
+//    for(s32 i=1; i < Month_Count + 1; ++i){
+//        if(pm->mm_s32 == i){
+//            month = pm->year->months + i - 1;
+//            break;
+//        }
+//    }
+//    return(month);
+//}
 
 static bool
 test_date_against_format(String8 date){
@@ -785,7 +787,7 @@ test_date_against_format(String8 date){
     defer(end_scratch(scratch));
 
     CSV_Profile* profile = pm->csv_profile;
-    char delimiter = date_delimiters[profile->date_format_idx];
+    char delimiter = date_delimiters[profile->date_format_kind];
 
     if(!str8_contains_byte(date, delimiter)){
         return(false);
@@ -794,7 +796,7 @@ test_date_against_format(String8 date){
     String8Node* date_parts = str8_split(scratch.arena, date, delimiter);
 
     String8 dd, mm, yyyy;
-    switch(profile->date_format_idx){
+    switch(profile->date_format_kind){
         case Format_Kind_MMDDYYYY_Dash:
         case Format_Kind_MMDDYYYY_Forward_Slash:{
             mm   = date_parts->next->str;
@@ -894,7 +896,6 @@ test_csv_against_profile(String8 path){
         String8* date_view = &data;
         bool format_good = true;
         while(date_view->size && format_good){
-        //while(date_view->size && format_good && pm->new_file_or_format){
             line = str8_eat_line(date_view);
 
             s32 count = 0;
@@ -913,7 +914,6 @@ test_csv_against_profile(String8 path){
             }
         }
         pm->date_format_found = format_good;
-        //pm->new_file_or_format = false;
     }
 
     os_file_close(file);
@@ -991,14 +991,14 @@ deserialize_csv(String8 full_path){
                 str8_strip_quotes(&word);
 
                 if(count == date_idx){
-                    copy_str8_to_char(trans->date, word, TRANS_DESCRIPTION_SIZE);
+                    copy_str8_to_char(trans->date, word, TRANS_DATE_SIZE);
                     date_parsed = true;
                 }
                 else if(count == amount_idx){
                     if(str8_starts_with(word, str8_literal("-"))){
                         str8_advance(&word, 1);
                     }
-                    copy_str8_to_char(trans->amount, word, TRANS_DESCRIPTION_SIZE);
+                    copy_str8_to_char(trans->amount, word, TRANS_AMOUNT_SIZE);
                 }
                 else if(count == desc_idx){
                     String8 view = word;
@@ -1012,8 +1012,12 @@ deserialize_csv(String8 full_path){
             // after we pull all transaction info, use the date to find the correct year and month
             if(pm->date_format_found && date_parsed){
                 parse_day_month_year(trans);
-                year = set_year_based_on_date();
-                month = set_month_based_on_date();
+
+                s32 year_idx = (MAX_YEAR_COUNT/2) + (pm->yyyy_s32 - pm->current_year);
+                year_idx = clamp_s32(year_idx, 0, MAX_YEAR_COUNT);
+                pm->year = pm->years + year_idx;
+                year = pm->year;
+                month = pm->year->months + pm->mm_s32 - 1;
 
                 ScratchArena scratch = begin_scratch();
                 String8 result = str8_concat(scratch.arena, pm->yyyy, str8_literal("-"));
@@ -1140,8 +1144,8 @@ deserialize_config(void){
                     else if(str8_compare(key, str8_literal("format"))){
                         copy_str8_to_char(profile->date_format, value, PROFILE_DATE_FORMAT_SIZE);
                     }
-                    else if(str8_compare(key, str8_literal("format_idx"))){
-                        profile->date_format_idx = atoi((char*)value.str);
+                    else if(str8_compare(key, str8_literal("format_kind"))){
+                        profile->date_format_kind = atoi((char*)value.str);
                     }
                 }
             }
@@ -1308,8 +1312,8 @@ serialize_config(void){
         profile = profile->next;
         arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#csv_profile%i\n", i);
         arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
-                "name=%s\x1B date=%s\x1B amount=%s\x1B description=%s\x1B format=%s\x1B format_idx=%i\n",
-                profile->name, profile->date, profile->amount, profile->description, profile->date_format, profile->date_format_idx);
+                "name=%s\x1B date=%s\x1B amount=%s\x1B description=%s\x1B format=%s\x1B format_kind=%i\n",
+                profile->name, profile->date, profile->amount, profile->description, profile->date_format, profile->date_format_kind);
     }
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#profile_settings\n");
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "csv_profile_idx=%i\n", pm->csv_profile_idx);
@@ -1457,8 +1461,8 @@ deserialize_year(Year* year){
                     else if(str8_compare(key, str8_literal("description"))){
                         copy_str8_to_char(trans->description, value, TRANS_DESCRIPTION_SIZE);
                     }
-                    else if(str8_compare(key, str8_literal("selection"))){
-                        copy_str8_to_char(trans->selection, value, TRANS_DESCRIPTION_SIZE);
+                    else if(str8_compare(key, str8_literal("group"))){
+                        copy_str8_to_char(trans->group, value, TRANS_DESCRIPTION_SIZE);
                     }
                     else if(str8_compare(key, str8_literal("muted"))){
                         trans->muted = atoi((char*)value.str);
@@ -1492,8 +1496,8 @@ serialize_year(Year* year){
             for(s32 t_idx = 0; t_idx < month->transaction_count; ++t_idx){
                 t = t->next;
                 arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
-                                      "date=%s\x1B amount=%s\x1B description=%s\x1B selection=%s\x1B muted=%i\n",
-                                      t->date, t->amount, t->description, t->selection, t->muted);
+                                      "date=%s\x1B amount=%s\x1B description=%s\x1B group=%s\x1B muted=%i\n",
+                                      t->date, t->amount, t->description, t->group, t->muted);
             }
         }
 
@@ -1569,10 +1573,10 @@ deserialize_budget(void){
         }
         else if(bps == BudgetParsingState_CategoryGroup){
             CategoryGroup* category_group = (CategoryGroup*)pool_next(pm->category_group_pool);
-            dll_push_back(pm->month_categories, category_group);
-            category_group->rows = (Row*)pool_next(pm->row_pool);
-            dll_clear(category_group->rows);
-            ++pm->categories_count;
+            dll_push_back(pm->month_category_groups, category_group);
+            category_group->categories = (Category*)pool_next(pm->category_pool);
+            dll_clear(category_group->categories);
+            ++pm->category_groups_count;
 
             while(line.size){
                 String8 word = str8_eat_word(&line);
@@ -1588,23 +1592,23 @@ deserialize_budget(void){
                     if(str8_compare(key, str8_literal("name"))){
                         copy_str8_to_char(category_group->name, value, TRANS_DESCRIPTION_SIZE);
                     }
-                    else if(str8_compare(key, str8_literal("draw_rows"))){
-                        category_group->draw_rows = atoi((char*)value.str);
+                    else if(str8_compare(key, str8_literal("draw_categories"))){
+                        category_group->draw_categories = atoi((char*)value.str);
                     }
                     else if(str8_compare(key, str8_literal("muted"))){
                         category_group->muted = atoi((char*)value.str);
                     }
                 }
             }
-            bps = BudgetParsingState_Row;
+            bps = BudgetParsingState_Category;
         }
-        else if(bps == BudgetParsingState_Row){
-            CategoryGroup* category_group = pm->month_categories->prev;
-            ++category_group->row_count;
+        else if(bps == BudgetParsingState_Category){
+            CategoryGroup* category_group = pm->month_category_groups->prev;
+            ++category_group->category_count;
 
-            Row* row = (Row*)pool_next(pm->row_pool);
-            dll_push_back(category_group->rows, row);
-            ++pm->total_rows_count;
+            Category* category = (Category*)pool_next(pm->category_pool);
+            dll_push_back(category_group->categories, category);
+            ++pm->total_categories_count;
 
             while(line.size){
                 String8 word = str8_eat_word(&line);
@@ -1618,13 +1622,13 @@ deserialize_budget(void){
                     String8 value = str8_node->prev->str;
 
                     if(str8_compare(key, str8_literal("name"))){
-                        copy_str8_to_char(row->name, value, TRANS_DESCRIPTION_SIZE);
+                        copy_str8_to_char(category->name, value, TRANS_DESCRIPTION_SIZE);
                     }
                     else if(str8_compare(key, str8_literal("planned"))){
-                        copy_str8_to_char(row->planned, value, TRANS_DESCRIPTION_SIZE);
+                        copy_str8_to_char(category->planned, value, TRANS_DESCRIPTION_SIZE);
                     }
                     else if(str8_compare(key, str8_literal("muted"))){
-                        row->muted = atoi((char*)value.str);
+                        category->muted = atoi((char*)value.str);
                     }
                 }
             }
@@ -1639,23 +1643,23 @@ deserialize_budget(void){
 static void
 serialize_budget(void){
     Arena* arena = pm->data_arena;
-    CategoryGroup* c = pm->month_categories;
+    CategoryGroup* cg = pm->month_category_groups;
 
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#budget\n");
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "budget=%i\n", atoi(pm->budget));
 
-    for(s32 c_idx = 0; c_idx < pm->categories_count; ++c_idx){
-        c = c->next;
+    for(s32 c_idx = 0; c_idx < pm->category_groups_count; ++c_idx){
+        cg = cg->next;
 
         arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#category_group\n");
         arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
-                              "name=%s\x1B draw_rows=%i muted=%i\n", c->name, c->draw_rows, c->muted);
+                              "name=%s\x1B draw_categories=%i muted=%i\n", cg->name, cg->draw_categories, cg->muted);
 
-        Row* r = c->rows;
-        for(s32 r_idx = 0; r_idx < c->row_count; ++r_idx){
-            r = r->next;
+        Category* c = cg->categories;
+        for(s32 r_idx = 0; r_idx < cg->category_count; ++r_idx){
+            c = c->next;
             arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
-                                  "\tname=%s\x1B planned=%s muted=%i\n", r->name, r->planned, r->muted);
+                                  "\tname=%s\x1B planned=%s muted=%i\n", c->name, c->planned, c->muted);
         }
     }
 
