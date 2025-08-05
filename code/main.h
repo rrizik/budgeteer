@@ -38,6 +38,7 @@
 #include "tinyfiledialogs/tinyfiledialogs.h"
 #include "meta.h"
 
+bool do_once = false;
 static String8 build_path;
 static String8 fonts_path;
 static String8 shaders_path;
@@ -119,27 +120,26 @@ wrap_index(s32 idx, s32 size){
     return(((idx % size) + size) % size);
 }
 
-#define ROW_NAME_SIZE 128
-#define ROW_PLANNED_SIZE 128
+#define CATEGORY_NAME_SIZE 128
+#define CATEGORY_PLANNED_SIZE 128
 typedef struct Category{
     Category* next;
     Category* prev;
 
-    char name[ROW_NAME_SIZE];
-    char planned[ROW_PLANNED_SIZE];
+    char name[CATEGORY_NAME_SIZE];
+    char planned[CATEGORY_PLANNED_SIZE];
     f32 spent;
     f32 diff;
 
     bool muted;
 } Category;
 
-#define CAT_NAME_SIZE 128
 typedef struct CategoryGroup{
     CategoryGroup* next;
     CategoryGroup* prev;
     Category* categories;
 
-    char name[CAT_NAME_SIZE];
+    char name[CATEGORY_NAME_SIZE];
     f32 planned; // todo(rr): this is considered a kind of cache, don't do this unless you actually need to
     f32 spent;
     f32 diff;
@@ -149,10 +149,19 @@ typedef struct CategoryGroup{
     bool muted;
 } CategoryGroup;
 
+global u64 merchant_id = 0;
+#define MERCH_DESCRIPTION_SIZE 1024
+typedef struct Merchant{
+    Merchant* next;
+    u64 id;
+    String8 description;
+    String8 category;
+} Merchant;
+
 #define TRANS_DATE_SIZE 128
 #define TRANS_AMOUNT_SIZE 128
 #define TRANS_DESCRIPTION_SIZE 1024
-#define TRANS_GROUP_SIZE 128
+#define TRANS_CATEGORY_SIZE 128
 typedef struct Transaction{
     Transaction* next;
     Transaction* prev;
@@ -160,8 +169,9 @@ typedef struct Transaction{
     char date[TRANS_DATE_SIZE];
     char amount[TRANS_AMOUNT_SIZE];
     char description[TRANS_DESCRIPTION_SIZE];
-    char group[TRANS_GROUP_SIZE];
+    char category[TRANS_CATEGORY_SIZE];
 
+    u64 merchant_id;
     bool muted;
 } Transation;
 
@@ -247,12 +257,12 @@ typedef struct CSV_Profile{
     s32  date_format_kind;
 } CSV_Profile;
 
-#define GROUP_SIZE 128
+#define CATEGORY_SIZE 128
 #define MAX_CATEGORY_GROUP_COUNT 256
-#define MAX_ROW_COUNT 2048
+#define MAX_CATEGORY_COUNT 2048
 #define MAX_TRANSACTION_COUNT 32768
 #define MAX_PROFILE_COUNT 32
-#define MAX_GROUP_LIST_COUNT 1024
+#define MAX_CATEGORY_LIST_COUNT 1024
 typedef struct PermanentMemory{
     // memory
     Arena arena;
@@ -274,6 +284,7 @@ typedef struct PermanentMemory{
     s32 year_idx;
     s32 transaction_year;
     s32 current_year;
+    Merchant* merchants;
 
     // todo(rr): Review totals for all.
     u32 total_categories_count;
@@ -285,8 +296,8 @@ typedef struct PermanentMemory{
 
     // for creating the transaction selection list
     // todo(rr): just turn this into a list
-	String8* selection_list;
-    u32 selection_count;
+	String8* category_list;
+    u32 category_list_count;
 
     // Profiles
     CSV_Profile* csv_profiles;
@@ -746,40 +757,13 @@ parse_day_month_year(Transaction* trans){
     pm->mm_s32   = atoi((char*)pm->mm.str);
     pm->yyyy_s32 = atoi((char*)pm->yyyy.str);
 
+    // Set current year based on the transaction that is deserialized
+    s32 year_idx = (MAX_YEAR_COUNT/2) + (pm->yyyy_s32 - pm->current_year);
+    year_idx = clamp_s32(year_idx, 0, MAX_YEAR_COUNT);
+    pm->year = pm->years + year_idx;
+
     end_scratch(scratch);
 }
-
-// cleanup: Remove this once you are sure.
-//static Year*
-//set_year_based_on_date(){
-//    Year* year;
-//    bool found = false;
-//    for(s32 i=0; i < MAX_YEAR_COUNT; ++i){
-//        year = pm->years + i;
-//        if(pm->yyyy_s32 == year->number){
-//            pm->year = pm->years + i;
-//            found = true;
-//            break;
-//        }
-//    }
-//    if(!found){
-//        year = 0;
-//    }
-//    return(year);
-//}
-
-// cleanup: Remove this once you are sure.
-//static MonthInfo*
-//set_month_based_on_date(){
-//    MonthInfo* month;
-//    for(s32 i=1; i < Month_Count + 1; ++i){
-//        if(pm->mm_s32 == i){
-//            month = pm->year->months + i - 1;
-//            break;
-//        }
-//    }
-//    return(month);
-//}
 
 static bool
 test_date_against_format(String8 date){
@@ -1013,9 +997,6 @@ deserialize_csv(String8 full_path){
             if(pm->date_format_found && date_parsed){
                 parse_day_month_year(trans);
 
-                s32 year_idx = (MAX_YEAR_COUNT/2) + (pm->yyyy_s32 - pm->current_year);
-                year_idx = clamp_s32(year_idx, 0, MAX_YEAR_COUNT);
-                pm->year = pm->years + year_idx;
                 year = pm->year;
                 month = pm->year->months + pm->mm_s32 - 1;
 
@@ -1292,6 +1273,7 @@ deserialize_config(void){
                     }
                     else if(str8_compare(key, str8_literal("month_tab_idx"))){
                         pm->month_tab_idx = atoi((char*)value.str);
+                        pm->month_tab_flags[pm->month_tab_idx] = ImGuiTabItemFlags_SetSelected;
                     }
                 }
             }
@@ -1441,6 +1423,8 @@ deserialize_year(Year* year){
                 ++month->transaction_count;
             }
 
+            String8 description_tmp = {0};
+            String8 category_tmp = {0};
             while(line.size){
                 String8 word = str8_eat_word(&line);
                 if(word.count){
@@ -1453,22 +1437,63 @@ deserialize_year(Year* year){
                     String8 value = str8_node->prev->str;
 
                     if(str8_compare(key, str8_literal("date"))){
-                        copy_str8_to_char(trans->date, value, TRANS_DESCRIPTION_SIZE);
+                        copy_str8_to_char(trans->date, value, TRANS_DATE_SIZE);
                     }
                     else if(str8_compare(key, str8_literal("amount"))){
-                        copy_str8_to_char(trans->amount, value, TRANS_DESCRIPTION_SIZE);
+                        copy_str8_to_char(trans->amount, value, TRANS_AMOUNT_SIZE);
                     }
                     else if(str8_compare(key, str8_literal("description"))){
                         copy_str8_to_char(trans->description, value, TRANS_DESCRIPTION_SIZE);
+                        if(value.count){
+                            description_tmp = str8(value.str, value.count);
+                        }
                     }
                     else if(str8_compare(key, str8_literal("group"))){
-                        copy_str8_to_char(trans->group, value, TRANS_DESCRIPTION_SIZE);
+                        if(year->number == 2024){
+                            //debug_break();
+                        }
+                        copy_str8_to_char(trans->category, value, TRANS_CATEGORY_SIZE);
+                        category_tmp = str8(value.str, value.count);
+                        String8 empty = str8_literal(" \x1B");
+                        if(str8_compare(value, empty) || value.count == 1){
+                            for(Merchant* m = pm->merchants; m != 0; m = m->next){
+                                if(str8_compare(m->description, description_tmp)){
+                                    copy_str8_to_char(trans->category, m->category, TRANS_CATEGORY_SIZE);
+                                    break;
+                                }
+                            }
+                        }
                     }
                     else if(str8_compare(key, str8_literal("muted"))){
                         trans->muted = atoi((char*)value.str);
                     }
                 }
             }
+
+            bool found = false;
+            for(Merchant* m = pm->merchants; m != 0; m = m->next){
+                if(str8_compare(m->description, description_tmp)){
+                    found = true;
+                    break;
+                }
+            }
+            if(!found){
+                Merchant* m = push_struct(&pm->arena, Merchant);
+                if(pm->merchants == 0){
+                    pm->merchants = m;
+                }
+                else{
+                    m->next = pm->merchants;
+                    pm->merchants = m;
+                }
+                m->description.str = push_array(&pm->arena, u8, TRANS_DESCRIPTION_SIZE);
+                m->category.str = push_array(&pm->arena, u8, TRANS_CATEGORY_SIZE);
+
+                str8_copy(&m->description, &description_tmp);
+                str8_copy(&m->category, &category_tmp);
+                m->id = merchant_id++;
+            }
+
         }
     }
 
@@ -1497,7 +1522,7 @@ serialize_year(Year* year){
                 t = t->next;
                 arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
                                       "date=%s\x1B amount=%s\x1B description=%s\x1B group=%s\x1B muted=%i\n",
-                                      t->date, t->amount, t->description, t->group, t->muted);
+                                      t->date, t->amount, t->description, t->category, t->muted);
             }
         }
 
