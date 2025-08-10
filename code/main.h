@@ -566,7 +566,7 @@ char_only_spaces(char* src){
 
 // todo: remove this once you change to str8 for everything
 static void
-copy_str8_to_char(char* c, String8 string, s32 max_size){
+str8_copy_to_char(char* c, String8 string, s32 max_size){
     s32 smallest_size = max_size <= string.size ? max_size : string.size;
     for(s32 i=0; i < smallest_size; ++i){
         c[i] = string.str[i];
@@ -579,7 +579,7 @@ copy_str8_to_char(char* c, String8 string, s32 max_size){
     }
 }
 
-// note: this is dangeours if dst doesn't have enough memory
+// note important: this is dangeours if dst doesn't have enough memory
 static void
 str8_copy(String8* dst, String8* src){
     s32 count = 0;
@@ -975,19 +975,19 @@ deserialize_csv(String8 full_path){
                 str8_strip_quotes(&word);
 
                 if(count == date_idx){
-                    copy_str8_to_char(trans->date, word, TRANS_DATE_SIZE);
+                    str8_copy_to_char(trans->date, word, TRANS_DATE_SIZE);
                     date_parsed = true;
                 }
                 else if(count == amount_idx){
                     if(str8_starts_with(word, str8_literal("-"))){
                         str8_advance(&word, 1);
                     }
-                    copy_str8_to_char(trans->amount, word, TRANS_AMOUNT_SIZE);
+                    str8_copy_to_char(trans->amount, word, TRANS_AMOUNT_SIZE);
                 }
                 else if(count == desc_idx){
                     String8 view = word;
                     str8_strip_quotes(&view);
-                    copy_str8_to_char(trans->description, view, TRANS_DESCRIPTION_SIZE);
+                    str8_copy_to_char(trans->description, view, TRANS_DESCRIPTION_SIZE);
                 }
 
                 ++count;
@@ -1005,7 +1005,7 @@ deserialize_csv(String8 full_path){
                 result = str8_concat(scratch.arena, result, pm->mm);
                 result = str8_concat(scratch.arena, result, str8_literal("-"));
                 result = str8_concat(scratch.arena, result, pm->dd);
-                copy_str8_to_char(trans->date, result, TRANS_DESCRIPTION_SIZE);
+                str8_copy_to_char(trans->date, result, TRANS_DESCRIPTION_SIZE);
                 end_scratch(scratch);
             }
 
@@ -1111,19 +1111,19 @@ deserialize_config(void){
                     String8 value = str8_node->prev->str;
 
                     if(str8_compare(key, str8_literal("name"))){
-                        copy_str8_to_char(profile->name, value, PROFILE_NAME_SIZE);
+                        str8_copy_to_char(profile->name, value, PROFILE_NAME_SIZE);
                     }
                     else if(str8_compare(key, str8_literal("date"))){
-                        copy_str8_to_char(profile->date, value, PROFILE_DATE_SIZE);
+                        str8_copy_to_char(profile->date, value, PROFILE_DATE_SIZE);
                     }
                     else if(str8_compare(key, str8_literal("amount"))){
-                        copy_str8_to_char(profile->amount, value, PROFILE_AMOUNT_SIZE);
+                        str8_copy_to_char(profile->amount, value, PROFILE_AMOUNT_SIZE);
                     }
                     else if(str8_compare(key, str8_literal("description"))){
-                        copy_str8_to_char(profile->description, value, PROFILE_DESCRIPTION_SIZE);
+                        str8_copy_to_char(profile->description, value, PROFILE_DESCRIPTION_SIZE);
                     }
                     else if(str8_compare(key, str8_literal("format"))){
-                        copy_str8_to_char(profile->date_format, value, PROFILE_DATE_FORMAT_SIZE);
+                        str8_copy_to_char(profile->date_format, value, PROFILE_DATE_FORMAT_SIZE);
                     }
                     else if(str8_compare(key, str8_literal("format_kind"))){
                         profile->date_format_kind = atoi((char*)value.str);
@@ -1423,8 +1423,8 @@ deserialize_year(Year* year){
                 ++month->transaction_count;
             }
 
-            String8 description_tmp = {0};
-            String8 category_tmp = {0};
+            String8 description_str = {0};
+            String8 category_str = {0};
             while(line.size){
                 String8 word = str8_eat_word(&line);
                 if(word.count){
@@ -1437,32 +1437,18 @@ deserialize_year(Year* year){
                     String8 value = str8_node->prev->str;
 
                     if(str8_compare(key, str8_literal("date"))){
-                        copy_str8_to_char(trans->date, value, TRANS_DATE_SIZE);
+                        str8_copy_to_char(trans->date, value, TRANS_DATE_SIZE);
                     }
                     else if(str8_compare(key, str8_literal("amount"))){
-                        copy_str8_to_char(trans->amount, value, TRANS_AMOUNT_SIZE);
+                        str8_copy_to_char(trans->amount, value, TRANS_AMOUNT_SIZE);
                     }
                     else if(str8_compare(key, str8_literal("description"))){
-                        copy_str8_to_char(trans->description, value, TRANS_DESCRIPTION_SIZE);
-                        if(value.count){
-                            description_tmp = str8(value.str, value.count);
-                        }
+                        str8_copy_to_char(trans->description, value, TRANS_DESCRIPTION_SIZE);
+                        description_str = str8(value.str, value.count);
                     }
                     else if(str8_compare(key, str8_literal("group"))){
-                        if(year->number == 2024){
-                            //debug_break();
-                        }
-                        copy_str8_to_char(trans->category, value, TRANS_CATEGORY_SIZE);
-                        category_tmp = str8(value.str, value.count);
-                        String8 empty = str8_literal(" \x1B");
-                        if(str8_compare(value, empty) || value.count == 1){
-                            for(Merchant* m = pm->merchants; m != 0; m = m->next){
-                                if(str8_compare(m->description, description_tmp)){
-                                    copy_str8_to_char(trans->category, m->category, TRANS_CATEGORY_SIZE);
-                                    break;
-                                }
-                            }
-                        }
+                        str8_copy_to_char(trans->category, value, TRANS_CATEGORY_SIZE);
+                        category_str = str8(value.str, value.count);
                     }
                     else if(str8_compare(key, str8_literal("muted"))){
                         trans->muted = atoi((char*)value.str);
@@ -1470,10 +1456,14 @@ deserialize_year(Year* year){
                 }
             }
 
+            String8 empty_category = str8_literal(" \x1B");
             bool found = false;
             for(Merchant* m = pm->merchants; m != 0; m = m->next){
-                if(str8_compare(m->description, description_tmp)){
+                if(str8_compare(m->description, description_str)){
                     found = true;
+                    if(str8_compare(category_str, empty_category) || category_str.count == 1){
+                        str8_copy_to_char(trans->category, m->category, TRANS_CATEGORY_SIZE);
+                    }
                     break;
                 }
             }
@@ -1489,8 +1479,8 @@ deserialize_year(Year* year){
                 m->description.str = push_array(&pm->arena, u8, TRANS_DESCRIPTION_SIZE);
                 m->category.str = push_array(&pm->arena, u8, TRANS_CATEGORY_SIZE);
 
-                str8_copy(&m->description, &description_tmp);
-                str8_copy(&m->category, &category_tmp);
+                str8_copy(&m->description, &description_str);
+                str8_copy(&m->category, &category_str);
                 m->id = merchant_id++;
             }
 
@@ -1592,7 +1582,7 @@ deserialize_budget(void){
                 String8 value = str8_node->prev->str;
 
                 if(str8_compare(key, str8_literal("budget"))){
-                    copy_str8_to_char(pm->budget, value, TRANS_DESCRIPTION_SIZE);
+                    str8_copy_to_char(pm->budget, value, TRANS_DESCRIPTION_SIZE);
                 }
             }
         }
@@ -1615,7 +1605,7 @@ deserialize_budget(void){
                     String8 value = str8_node->prev->str;
 
                     if(str8_compare(key, str8_literal("name"))){
-                        copy_str8_to_char(category_group->name, value, TRANS_DESCRIPTION_SIZE);
+                        str8_copy_to_char(category_group->name, value, TRANS_DESCRIPTION_SIZE);
                     }
                     else if(str8_compare(key, str8_literal("draw_categories"))){
                         category_group->draw_categories = atoi((char*)value.str);
@@ -1647,10 +1637,10 @@ deserialize_budget(void){
                     String8 value = str8_node->prev->str;
 
                     if(str8_compare(key, str8_literal("name"))){
-                        copy_str8_to_char(category->name, value, TRANS_DESCRIPTION_SIZE);
+                        str8_copy_to_char(category->name, value, TRANS_DESCRIPTION_SIZE);
                     }
                     else if(str8_compare(key, str8_literal("planned"))){
-                        copy_str8_to_char(category->planned, value, TRANS_DESCRIPTION_SIZE);
+                        str8_copy_to_char(category->planned, value, TRANS_DESCRIPTION_SIZE);
                     }
                     else if(str8_compare(key, str8_literal("muted"))){
                         category->muted = atoi((char*)value.str);

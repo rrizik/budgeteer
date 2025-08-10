@@ -2171,7 +2171,7 @@ draw_entire_ui(void){
                             String8 inner_trans_desc = str8(t->description, char_length(t->description));
 
                             if(str8_compare(trans_desc, inner_trans_desc)){
-                                copy_str8_to_char(t->category, trans_selection, TRANS_CATEGORY_SIZE);
+                                str8_copy_to_char(t->category, trans_selection, TRANS_CATEGORY_SIZE);
                             }
 						}
                     }
