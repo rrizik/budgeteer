@@ -22,12 +22,10 @@ initialize_years_and_transactions(void){
     for(s32 idx=MAX_YEAR_COUNT/2; idx < MAX_YEAR_COUNT; ++idx){
         Year* year = pm->years + idx;
         year->number = pm->current_year + (idx - (MAX_YEAR_COUNT/2));
-        print("%i\n", year->number);
     }
     for(s32 idx=MAX_YEAR_COUNT/2; idx >= 0; --idx){
         Year* year = pm->years + idx;
         year->number = pm->current_year + (idx - (MAX_YEAR_COUNT/2));
-        print("%i\n", year->number);
     }
 
     for(s32 idx=0; idx < MAX_YEAR_COUNT; ++idx){
@@ -1743,33 +1741,6 @@ draw_entire_ui(void){
         }
         tooltip(str8_literal("Delete all transactions for all the year"));
 
-        ImGui::SameLine();
-        ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + plus_expense_column_start - minus_padding - minus_padding);
-        ImGui::PushFont(my_font12);
-        fmt = str8_fmt(tm->frame_arena, "%c##apply_category_group_to_all", icon_lookup[Icon_Check]);
-        // INCOMPLETE : this is the slow solution but just to see if it works
-        if(ImGui::Button((char*)fmt.str)){
-            //String8 trans_group = str8(trans->category, char_length(trans->category));
-            //String8 trans_desc = str8(trans->description, char_length(trans->description));
-
-            Year* y = pm->year;
-            for(s32 y_idx=0; y_idx < Month_Count; ++y_idx){
-                MonthInfo* m = y->months + y_idx;
-                Transaction* t = m->transactions;
-
-                for(s32 z_idx=0; z_idx < m->transaction_count; ++z_idx){
-                    t = t->next;
-                    String8 inner_trans_desc = str8(t->description, char_length(t->description));
-
-                    //if(str8_compare(trans_desc, inner_trans_desc)){
-                        //copy_str8_to_char(t->group, trans_group, TRANS_CATEGORY_SIZE);
-                    //}
-                }
-            }
-        }
-        ImGui::PopFont();
-        tooltip(str8_literal("Apply category_groups to the entire year.\nThis is based on matching transaction descriptions"));
-
         if(ImGui::BeginTabBar("##Month", ImGuiTabBarFlags_None)){
 
             ImGui::PushStyleColor(ImGuiCol_TabActive, active_color);
@@ -1880,6 +1851,35 @@ draw_entire_ui(void){
         ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + category_group_select_column_start);
         ImGui::Text("Category");
 
+        //ImGui::PushFont(my_font12);
+        //ImGui::SameLine();
+        //fmt = str8_fmt(tm->frame_arena, "%c##refresh_categories", icon_lookup[Icon_Refresh]);
+        //if(ImGui::Button((char*)fmt.str)){
+        //    for(s32 x_idx=0; x_idx < MAX_YEAR_COUNT; ++x_idx){
+        //        Year* year = pm->years + x_idx;
+
+        //        for(s32 y_idx=0; y_idx < Month_Count; ++y_idx){
+        //            MonthInfo* month = year->months + y_idx;
+        //            Transaction* trans = month->transactions;
+
+        //            for(s32 z_idx=0; z_idx < month->transaction_count; ++z_idx){
+        //                trans = trans->next;
+        //                String8 trans_description = str8_cstring(trans->description);
+        //                String8 trans_category = str8_cstring(trans->category);
+        //                if(str8_compare(trans_category, empty_category)){
+        //                    for(Merchant* merch = pm->merchants; merch != 0; merch = merch->next){
+        //                        if(str8_compare(merch->description, trans_description)){
+        //                            str8_copy_to_char(trans->category, merch->category, TRANS_CATEGORY_SIZE);
+        //                        }
+        //                    }
+        //                }
+        //            }
+        //        }
+        //    }
+        //}
+        //ImGui::PopFont();
+        //tooltip(str8_literal("Refresh categories. Apply all set categories to all transactions that are not set."));
+
         ImGui::SameLine();
         ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + plus_expense_column_start);
         if(ImGui::Button("+##add_transaction_button")){
@@ -1888,13 +1888,10 @@ draw_entire_ui(void){
                 dll_push_back(month->transactions, trans);
 
                 if(month->transaction_count == 0){
-                    //ScratchArena scratch = begin_scratch();
                     String8 date = str8_fmt(scratch.arena, "01/01/%04d", year->number);
                     memcpy((void*)trans->date, (void*)date.str, date.size);
-                    //end_scratch(scratch);
                 }
                 else{
-                    //ScratchArena scratch = begin_scratch();
                     Transaction* last = trans->prev;
                     s32 date_length = (s32)char_length(last->date);
                     String8 date_str8 = str8(last->date, date_length);
@@ -1905,7 +1902,6 @@ draw_entire_ui(void){
                     join.mid = str8_literal("/");
                     String8 result = str8_join(scratch.arena, parts, join);
                     memcpy((void*)trans->date, (void*)result.str, result.count);
-                    //end_scratch(scratch);
                 }
                 memcpy((void*)trans->category, (void*)pm->category_list->str, pm->category_list->size);
 
@@ -2102,6 +2098,7 @@ draw_entire_ui(void){
                 // todo(rr): leave comments on this combo box explaing some things.
                 //           I don't remember why I did some of this stuff.
                 // note: populate selection box with options.
+                bool selected = false;
                 s32 color_idx = 0;
                 String8 combo_id = str8_formatted(scratch.arena, "##category_group_select%i", t_idx);
                 if(ImGui::BeginCombo((char*)combo_id.data, trans->category, ImGuiComboFlags_HeightLarge)){
@@ -2114,7 +2111,7 @@ draw_entire_ui(void){
                         ImVec2 max = ImVec2(min.x + ImGui::GetContentRegionAvail().x, min.y + ImGui::GetTextLineHeightWithSpacing());
 
                         if(n != 0){
-                            if(last_combo_name.count == 0){
+                            if(last_combo_name.size == 0){
                                 last_combo_name = selection_item;
                                 draw_list->AddRectFilled(min, max, combo_popup_alternating_colors[color_idx % 2]);
                             }
@@ -2137,6 +2134,7 @@ draw_entire_ui(void){
                         const bool is_selected = str8_compare(selection_item, trans_selection);
                         if(ImGui::Selectable((char*)selection_item.str, is_selected)){
                             memcpy((void*)trans->category, (void*)selection_item.str, selection_item.size + 1);
+                            selected = true;
                         }
 
                         if(is_selected){
@@ -2147,38 +2145,18 @@ draw_entire_ui(void){
                 }
                 ImGui::PopStyleColor(2);
                 ImGui::PopItemWidth();
-            }
-
-            // NOTE: HERE
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + plus_expense_column_start - minus_padding - minus_padding);
-            ImGui::PushFont(my_font12);
-            fmt = str8_fmt(tm->frame_arena, "%c##apply_category_group_to_all", icon_lookup[Icon_Check]);
-            // INCOMPLETE : this is the slow solution but just to see if it works
-            if(ImGui::Button((char*)fmt.str)){
-				String8 trans_selection = str8(trans->category, char_length(trans->category));
-				String8 trans_desc = str8(trans->description, char_length(trans->description));
-
-                for(s32 x_idx=0; x_idx < MAX_YEAR_COUNT; ++x_idx){
-                    Year* y = pm->years + x_idx;
-
-                    for(s32 y_idx=0; y_idx < Month_Count; ++y_idx){
-                        MonthInfo* m = y->months + y_idx;
-                        Transaction* t = m->transactions;
-
-						for(s32 z_idx=0; z_idx < m->transaction_count; ++z_idx){
-							t = t->next;
-                            String8 inner_trans_desc = str8(t->description, char_length(t->description));
-
-                            if(str8_compare(trans_desc, inner_trans_desc)){
-                                str8_copy_to_char(t->category, trans_selection, TRANS_CATEGORY_SIZE);
-                            }
+                if(selected){
+					String8 trans_description = str8_cstring(trans->description);
+					String8 trans_category = str8_cstring(trans->category);
+					for(Merchant* merch = pm->merchants; merch != 0; merch = merch->next){
+						if(str8_compare(merch->description, trans_description)){
+							str8_copy(&merch->category, &trans_category);
+                            break;
 						}
-                    }
+					}
+                    apply_new_category = true;
                 }
             }
-            ImGui::PopFont();
-            tooltip(str8_literal("Apply category_group to the current month.\nThis is based on matching transaction descriptions"));
 
             ImGui::SameLine();
             ImGui::SetCursorPosX(ImGui::GetColumnOffset(1) + x_expense_column_start - minus_padding);
@@ -2543,7 +2521,56 @@ do_one_frame(void){
     // DRAW ENTIRE UI
     collect_totals_for_months();
     draw_entire_ui();
+
+    if(apply_new_category){
+        for(s32 year_idx=0; year_idx < MAX_YEAR_COUNT; ++year_idx){
+            Year* year = pm->years + year_idx;
+            for(s32 month_idx=0; month_idx < Month_Count; ++month_idx){
+                MonthInfo* month = year->months + month_idx;
+                for(Transaction* trans = month->transactions->next; trans != month->transactions; trans = trans->next){
+
+                    bool found = false;
+                    String8 trans_description = str8_cstring(trans->description);
+                    String8 trans_category = str8_cstring(trans->category);
+                    Merchant* m_found = {0};
+                    for(Merchant* m = pm->merchants; m != 0; m = m->next){
+                        if(str8_compare(m->description, trans_description)){
+                            found = true;
+                            m_found = m;
+                            break;
+                        }
+                    }
+
+                    if(!found){
+                        Merchant* m = push_struct(&pm->arena, Merchant);
+                        sll_push_front(pm->merchants, m);
+
+                        m->description.str = push_array(&pm->arena, u8, TRANS_DESCRIPTION_SIZE);
+                        m->category.str = push_array(&pm->arena, u8, TRANS_CATEGORY_SIZE);
+                        str8_copy(&m->description, &trans_description);
+                        str8_copy(&m->category, &trans_category);
+
+                        m->id = merchant_id++;
+                    }
+                    else{
+                        str8_copy_to_char(trans->category, m_found->category, m_found->category.count);
+                    }
+                }
+            }
+        }
+        apply_new_category = false;
+    }
+
     //ImGui::ShowDemoWindow(); // Show demo window! :)
+    //
+
+	//s32 count = 0;
+	//for(Merchant* merch = pm->merchants; merch != 0; merch = merch->next){
+    //    //print("desc: %s\n", merch->description.str);
+    //    //print("cat:  %s\n", merch->category.str);
+    //    count++;
+	//}
+    //print("------------------ count: %i -----------------------\n", count);
 
 
     {
@@ -2573,9 +2600,8 @@ do_one_frame(void){
     // IMPORTANT NOTE(rr): WE SERIALIZE ALL THE TIME
     serialize_config();
     serialize_budget();
-    Year* year;
     for(s32 y_idx=0; y_idx < MAX_YEAR_COUNT; ++y_idx){
-        year = pm->years + y_idx;
+        Year* year = pm->years + y_idx;
         serialize_year(year);
     }
 

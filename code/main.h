@@ -52,7 +52,7 @@ static RGBA GREEN;
 
 static ImFont* my_font12;
 static ImFont* my_font20;
-static char icon_lookup[] = {' ', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v'};
+static char icon_lookup[] = {' ', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w'};
 typedef enum Icon{
     Icon_None,
 
@@ -83,6 +83,8 @@ typedef enum Icon{
 
     Icon_MagA,
     Icon_MagB,
+
+    Icon_Refresh,
 
     Icon_Count,
 } Icon;
@@ -364,6 +366,8 @@ round_to_hundredth(f32 value){
     return(value);
 }
 
+static bool apply_new_category = false;
+static String8 empty_category = str8_literal(" ");
 static ImVec4  combo_popup_background_color;
 static ImColor combo_popup_alternating_colors[2];
 static String8 last_combo_name;
@@ -913,6 +917,7 @@ deserialize_csv(String8 full_path){
         return;
     }
 
+    // todo: what is this for?
     CSV_Profile* profile = pm->csv_profiles->next;
     for(s32 i=0; i < pm->csv_profile_idx; ++i){
         profile = profile->next;
@@ -966,6 +971,7 @@ deserialize_csv(String8 full_path){
 
             Transaction* trans = (Transaction*)pool_next(pm->transaction_pool);
 
+            //String8 description_str = {0};
             bool date_parsed = false;
             u32 count = 0;
             String8 word;
@@ -988,10 +994,12 @@ deserialize_csv(String8 full_path){
                     String8 view = word;
                     str8_strip_quotes(&view);
                     str8_copy_to_char(trans->description, view, TRANS_DESCRIPTION_SIZE);
+                    //description_str = str8(view.str, view.count);
                 }
 
                 ++count;
             }
+            str8_copy_to_char(trans->category, empty_category, empty_category.count);
 
             // after we pull all transaction info, use the date to find the correct year and month
             if(pm->date_format_found && date_parsed){
@@ -1022,6 +1030,7 @@ deserialize_csv(String8 full_path){
         }
     }
 
+    apply_new_category = true;
     pm->transaction_count += year->transaction_count;
     pm->year = pm->years + wrap_index(pm->year_idx, MAX_YEAR_COUNT);
     os_file_close(file);
@@ -1435,19 +1444,22 @@ deserialize_year(Year* year){
                     String8Node* str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node->next->str;
                     String8 value = str8_node->prev->str;
+                    if(str8_ends_with_byte(value, '\x1B')){
+                        str8_trim_right(&value, 1);
+                    }
 
                     if(str8_compare(key, str8_literal("date"))){
-                        str8_copy_to_char(trans->date, value, TRANS_DATE_SIZE);
+                        str8_copy_to_char(trans->date, value, value.count);
                     }
                     else if(str8_compare(key, str8_literal("amount"))){
-                        str8_copy_to_char(trans->amount, value, TRANS_AMOUNT_SIZE);
+                        str8_copy_to_char(trans->amount, value, value.count);
                     }
                     else if(str8_compare(key, str8_literal("description"))){
-                        str8_copy_to_char(trans->description, value, TRANS_DESCRIPTION_SIZE);
+                        str8_copy_to_char(trans->description, value, value.count);
                         description_str = str8(value.str, value.count);
                     }
                     else if(str8_compare(key, str8_literal("group"))){
-                        str8_copy_to_char(trans->category, value, TRANS_CATEGORY_SIZE);
+                        str8_copy_to_char(trans->category, value, value.count);
                         category_str = str8(value.str, value.count);
                     }
                     else if(str8_compare(key, str8_literal("muted"))){
@@ -1455,35 +1467,6 @@ deserialize_year(Year* year){
                     }
                 }
             }
-
-            String8 empty_category = str8_literal(" \x1B");
-            bool found = false;
-            for(Merchant* m = pm->merchants; m != 0; m = m->next){
-                if(str8_compare(m->description, description_str)){
-                    found = true;
-                    if(str8_compare(category_str, empty_category) || category_str.count == 1){
-                        str8_copy_to_char(trans->category, m->category, TRANS_CATEGORY_SIZE);
-                    }
-                    break;
-                }
-            }
-            if(!found){
-                Merchant* m = push_struct(&pm->arena, Merchant);
-                if(pm->merchants == 0){
-                    pm->merchants = m;
-                }
-                else{
-                    m->next = pm->merchants;
-                    pm->merchants = m;
-                }
-                m->description.str = push_array(&pm->arena, u8, TRANS_DESCRIPTION_SIZE);
-                m->category.str = push_array(&pm->arena, u8, TRANS_CATEGORY_SIZE);
-
-                str8_copy(&m->description, &description_str);
-                str8_copy(&m->category, &category_str);
-                m->id = merchant_id++;
-            }
-
         }
     }
 
