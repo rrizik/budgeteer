@@ -52,7 +52,7 @@ static RGBA GREEN;
 
 static ImFont* my_font12;
 static ImFont* my_font20;
-static char icon_lookup[] = {' ', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w'};
+static char icon_lookup[] = {' ', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y'};
 typedef enum Icon{
     Icon_None,
 
@@ -64,11 +64,6 @@ typedef enum Icon{
     Icon_DoubleLeftArrow,
     Icon_DoubleRightArrow,
 
-    Icon_UpTriangle,
-    Icon_DownTriangle,
-    Icon_LeftTriangle,
-    Icon_RightTriangle,
-
     Icon_Collapse,
     Icon_Expand,
 
@@ -76,8 +71,6 @@ typedef enum Icon{
     Icon_Check,
     Icon_XSquare,
     Icon_X,
-    Icon_PlusSquare,
-    Icon_Plus,
     Icon_Square,
     Icon_SquareRounded,
 
@@ -85,6 +78,12 @@ typedef enum Icon{
     Icon_MagB,
 
     Icon_Refresh,
+
+    Icon_Show,
+    Icon_Hide,
+
+    Icon_Unlocked,
+    Icon_Locked,
 
     Icon_Count,
 } Icon;
@@ -158,6 +157,8 @@ typedef struct Merchant{
     u64 id;
     String8 description;
     String8 category;
+
+    bool hidden;
 } Merchant;
 
 #define TRANS_DATE_SIZE 128
@@ -174,7 +175,10 @@ typedef struct Transaction{
     char category[TRANS_CATEGORY_SIZE];
 
     u64 merchant_id;
+
     bool muted;
+    bool hidden;
+    bool locked;
 } Transation;
 
 // todo(rr): don't need this, don't store this info. Just calculate it once a free
@@ -189,6 +193,7 @@ typedef struct Totals{
 typedef struct MonthInfo{
     Transaction* transactions;
     u32 transaction_count;
+    u32 transaction_visible_count;
 
     Totals totals;
     bool muted;
@@ -291,7 +296,7 @@ typedef struct PermanentMemory{
     // todo(rr): Review totals for all.
     u32 total_categories_count;
     u32 category_groups_count;
-    u32 transaction_count;
+    u32 total_transaction_count;
     u32 quarter_category_groups_count;
     u32 biannual_category_groups_count;
     u32 annual_category_groups_count;
@@ -366,6 +371,8 @@ round_to_hundredth(f32 value){
     return(value);
 }
 
+static bool show_all_merchants = true;
+static bool apply_hidden_transactions = true;
 static bool apply_new_category = false;
 static String8 empty_category = str8_literal(" ");
 static ImVec4  combo_popup_background_color;
@@ -416,7 +423,7 @@ static f32 amount_column_width = 90;
 static f32 description_column_start = amount_column_start + amount_column_width + 20;
 static f32 description_column_width = 160;
 static f32 category_group_select_column_start = description_column_start + description_column_width + 10;
-static f32 category_group_select_column_width = 100;
+static f32 category_group_select_column_width = 160;
 static f32 plus_expense_column_start = category_group_select_column_start + category_group_select_column_width + 10;
 static f32 plus_expense_column_width = 23;
 static f32 x_expense_column_start = plus_expense_column_start + plus_expense_column_width;
@@ -513,31 +520,124 @@ dll_bubble_sort_date(Transaction* sentinel, bool ascending=false){
 }
 
 static void
-dll_insertion_sort(Transaction* sentinel){
-    // return if sentinel is empty
+dll_bubble_sort_description_merch(Merchant** head, bool ascending=false){
+    if(!head) return;
+
+    bool swapped;
+    do {
+        swapped = false;
+        Merchant** node = head;
+        while(*node && (*node)->next){
+            Merchant* a = *node;
+            Merchant* b = a->next;
+
+            s32 result = strcmp((char*)a->description.str, (char*)b->description.str);
+            bool out_of_order = ascending ? (result > 0) : (result < 0);
+            if(out_of_order){
+                a->next = b->next;
+                b->next = a;
+                *node = b;
+
+                swapped = true;
+            }
+            node = &(*node)->next;
+        }
+    } while(swapped);
+}
+
+static void
+dll_bubble_sort_category_merch(Merchant** head, bool ascending=false){
+    if(!head) return;
+
+    bool swapped;
+    do {
+        swapped = false;
+        Merchant** node = head;
+        while(*node && (*node)->next){
+            Merchant* a = *node;
+            Merchant* b = a->next;
+
+            s32 result = strcmp((char*)a->category.str, (char*)b->category.str);
+            bool out_of_order = ascending ? (result > 0) : (result < 0);
+            if(out_of_order){
+                a->next = b->next;
+                b->next = a;
+                *node = b;
+
+                swapped = true;
+            }
+            node = &(*node)->next;
+        }
+    } while(swapped);
+}
+
+static void
+dll_bubble_sort_category(Transaction* sentinel, bool ascending=false){
     if(sentinel->next == sentinel || sentinel->prev == sentinel){
         return;
     }
 
-    // grab first and second node
-    Transaction* current = sentinel->next->next;
-    while(current != sentinel){
-        Transaction* next_unsorted = current->next;
+    bool no_swaps = true;
+    while(no_swaps){
+        no_swaps = false;
+        Transaction* current = sentinel->next;
+        Transaction* next = sentinel->next->next;
+        while(next != sentinel){
+            s32 result = strcmp(current->category, next->category);
 
-        // find the insertion point
-        Transaction* insertion = sentinel->next;
-        s32 result = strcmp(current->date, insertion->date);
-        while(insertion != sentinel && result > 0){
-            insertion = insertion->next;
+            if(ascending && result > 0){
+                dll_swap(current, next, Transaction);
+                Transaction* tmp = current;
+                current = next;
+                next = tmp;
+                no_swaps = true;
+            }
+            else if(!ascending && result < 0){
+                dll_swap(current, next, Transaction);
+                Transaction* tmp = current;
+                current = next;
+                next = tmp;
+                no_swaps = true;
+            }
+
+            current = current->next;
+            next = next->next;
         }
+    }
+}
 
-        dll_remove(current);
-        current->next = insertion;
-        current->prev = insertion->prev;
-        insertion->prev->next = current;
-        insertion->prev = current;
+static void
+dll_bubble_sort_description(Transaction* sentinel, bool ascending=false){
+    if(sentinel->next == sentinel || sentinel->prev == sentinel){
+        return;
+    }
 
-        current = next_unsorted;
+    bool no_swaps = true;
+    while(no_swaps){
+        no_swaps = false;
+        Transaction* current = sentinel->next;
+        Transaction* next = sentinel->next->next;
+        while(next != sentinel){
+            s32 result = strcmp(current->description, next->description);
+
+            if(ascending && result > 0){
+                dll_swap(current, next, Transaction);
+                Transaction* tmp = current;
+                current = next;
+                next = tmp;
+                no_swaps = true;
+            }
+            else if(!ascending && result < 0){
+                dll_swap(current, next, Transaction);
+                Transaction* tmp = current;
+                current = next;
+                next = tmp;
+                no_swaps = true;
+            }
+
+            current = current->next;
+            next = next->next;
+        }
     }
 }
 
@@ -583,15 +683,19 @@ str8_copy_to_char(char* c, String8 string, s32 max_size){
     }
 }
 
+// todo: Get rid of this.
 // note important: this is dangeours if dst doesn't have enough memory
 static void
 str8_copy(String8* dst, String8* src){
     s32 count = 0;
-    while(src->count != count){
+    while(count != src->count){
         dst->data[count] = src->data[count];
-        ++count;
+        count++;
     }
-    dst->count = src->count;
+    if(count > 0){
+        dst->data[count] = '\0';
+        dst->count = count;
+    }
 }
 
 static u32
@@ -700,6 +804,7 @@ typedef enum ConfigParsingState{
     ConfigParsingState_Tooltips,
 
     ConfigParsingState_Year,
+    ConfigParsingState_Merchants,
 
     ConfigParsingState_Count,
 } ConfigParsingState;
@@ -971,7 +1076,7 @@ deserialize_csv(String8 full_path){
 
             Transaction* trans = (Transaction*)pool_next(pm->transaction_pool);
 
-            //String8 description_str = {0};
+            String8 description_str = {0};
             bool date_parsed = false;
             u32 count = 0;
             String8 word;
@@ -994,12 +1099,40 @@ deserialize_csv(String8 full_path){
                     String8 view = word;
                     str8_strip_quotes(&view);
                     str8_copy_to_char(trans->description, view, TRANS_DESCRIPTION_SIZE);
-                    //description_str = str8(view.str, view.count);
+                    description_str = str8(view.str, view.count);
                 }
 
                 ++count;
             }
             str8_copy_to_char(trans->category, empty_category, empty_category.count);
+
+            // speed: this can be hashed later if its an issue.
+            bool found = false;
+            for(Merchant* merch = pm->merchants; merch != 0; merch = merch->next){
+                if(str8_compare(merch->description, description_str)){
+                    trans->merchant_id = merch->id;
+                    found = true;
+                    break;
+                }
+            }
+            if(!found){
+                Merchant* merch = push_struct(&pm->arena, Merchant);
+                sll_push_front(pm->merchants, merch);
+
+                merch->description.str = push_array(&pm->arena, u8, TRANS_DESCRIPTION_SIZE);
+                merch->category.str = push_array(&pm->arena, u8, TRANS_CATEGORY_SIZE);
+                merch->id = merchant_id++;
+
+                memcpy(merch->description.str, description_str.str, description_str.count);
+                merch->description.count = description_str.count;
+                merch->description.str[merch->description.count] = '\0';
+
+                memcpy(merch->category.str, empty_category.str, empty_category.count);
+                merch->category.count = empty_category.count;
+                merch->category.str[merch->category.count] = '\0';
+
+                trans->merchant_id = merch->id;
+            }
 
             // after we pull all transaction info, use the date to find the correct year and month
             if(pm->date_format_found && date_parsed){
@@ -1031,7 +1164,8 @@ deserialize_csv(String8 full_path){
     }
 
     apply_new_category = true;
-    pm->transaction_count += year->transaction_count;
+    apply_hidden_transactions = true;
+    pm->total_transaction_count += year->transaction_count;
     pm->year = pm->years + wrap_index(pm->year_idx, MAX_YEAR_COUNT);
     os_file_close(file);
     end_scratch(scratch);
@@ -1082,6 +1216,9 @@ deserialize_config(void){
             }
             else if(str8_compare(line, str8_literal("#year\n"))){
                 cps = ConfigParsingState_Year;
+            }
+            else if(str8_compare(line, str8_literal("#merchants\n"))){
+                cps = ConfigParsingState_Merchants;
             }
         }
         else if(cps == ConfigParsingState_CSV_Profile_Settings){
@@ -1287,6 +1424,40 @@ deserialize_config(void){
                 }
             }
         }
+        else if(cps == ConfigParsingState_Merchants){
+            Merchant* merch = push_struct(&pm->arena, Merchant);
+            sll_push_front(pm->merchants, merch);
+            merch->description.str = push_array(&pm->arena, u8, TRANS_DESCRIPTION_SIZE);
+            merch->category.str = push_array(&pm->arena, u8, TRANS_CATEGORY_SIZE);
+            merch->id = merchant_id++;
+
+            while(line.size){
+                String8 word = str8_eat_word(&line);
+                if(word.count){
+                    if(!str8_contains_byte(word, '\x1B')){ // Todo: Check if I even need this if statement
+                        u32 count = str8_extend_word_to_byte(&word, '\x1B');
+                        str8_advance(&line, count);
+                    }
+                    String8Node* str8_node = str8_split(scratch.arena, word, '=');
+                    String8 key = str8_node->next->str;
+                    String8 value = str8_node->prev->str;
+
+                    if(str8_compare(key, str8_literal("description"))){
+                        memcpy(merch->description.str, value.str, value.count);
+                        merch->description.count = value.count;
+                        merch->description.str[merch->description.count] = '\0';
+                    }
+                    else if(str8_compare(key, str8_literal("category"))){
+                        memcpy(merch->category.str, value.str, value.count);
+                        merch->category.count = value.count;
+                        merch->category.str[merch->category.count] = '\0';
+                    }
+                    else if(str8_compare(key, str8_literal("hidden"))){
+                        merch->hidden = atoi((char*)value.str);
+                    }
+                }
+            }
+        }
     }
     cps = ConfigParsingState_None;
 
@@ -1343,6 +1514,14 @@ serialize_config(void){
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#year\n");
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
             "year_idx=%i month_tab_idx=%i\n", pm->year_idx, pm->month_tab_idx);
+
+    // merchants
+    arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#merchants\n");
+    for(Merchant* merch = pm->merchants; merch != 0; merch = merch->next){
+        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
+                "description=%s\x1B category=%s\x1B hidden=%i\n",
+                (char*)merch->description.str, (char*)merch->category.str, merch->hidden);
+    }
 
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - (s32)arena->at, "\0");
     ScratchArena scratch = begin_scratch();
@@ -1458,19 +1637,53 @@ deserialize_year(Year* year){
                         str8_copy_to_char(trans->description, value, value.count);
                         description_str = str8(value.str, value.count);
                     }
-                    else if(str8_compare(key, str8_literal("group"))){
+                    else if(str8_compare(key, str8_literal("category"))){
                         str8_copy_to_char(trans->category, value, value.count);
                         category_str = str8(value.str, value.count);
                     }
                     else if(str8_compare(key, str8_literal("muted"))){
                         trans->muted = atoi((char*)value.str);
                     }
+                    else if(str8_compare(key, str8_literal("hidden"))){
+                        trans->hidden = atoi((char*)value.str);
+                    }
+                    else if(str8_compare(key, str8_literal("locked"))){
+                        trans->locked = atoi((char*)value.str);
+                    }
                 }
+            }
+
+            // todo: temporary, remove this once merchant stuff is done.
+            bool found = false;
+            for(Merchant* merch = pm->merchants; merch != 0; merch = merch->next){
+                if(str8_compare(merch->description, description_str)){
+                    trans->merchant_id = merch->id;
+                    found = true;
+                    break;
+                }
+            }
+            if(!found){
+                Merchant* merch = push_struct(&pm->arena, Merchant);
+                sll_push_front(pm->merchants, merch);
+
+                merch->description.str = push_array(&pm->arena, u8, TRANS_DESCRIPTION_SIZE);
+                merch->category.str = push_array(&pm->arena, u8, TRANS_CATEGORY_SIZE);
+                merch->id = merchant_id++;
+
+                memcpy(merch->description.str, description_str.str, description_str.count);
+                merch->description.count = description_str.count;
+                merch->description.str[merch->description.count] = '\0';
+
+                memcpy(merch->category.str, empty_category.str, empty_category.count);
+                merch->category.count = empty_category.count;
+                merch->category.str[merch->category.count] = '\0';
+
+                trans->merchant_id = merch->id;
             }
         }
     }
 
-    pm->transaction_count += year->transaction_count;
+    pm->total_transaction_count += year->transaction_count;
     tps = TransactionParsingState_None;
     os_file_close(file);
     end_scratch(scratch);
@@ -1494,8 +1707,8 @@ serialize_year(Year* year){
             for(s32 t_idx = 0; t_idx < month->transaction_count; ++t_idx){
                 t = t->next;
                 arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
-                                      "date=%s\x1B amount=%s\x1B description=%s\x1B group=%s\x1B muted=%i\n",
-                                      t->date, t->amount, t->description, t->category, t->muted);
+                                      "date=%s\x1B amount=%s\x1B description=%s\x1B category=%s\x1B muted=%i\x1B hidden=%i\x1B locked=%i\n",
+                                      t->date, t->amount, t->description, t->category, t->muted, t->hidden, t->locked);
             }
         }
 
