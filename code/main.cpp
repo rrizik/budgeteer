@@ -112,7 +112,6 @@ static void
 init_paths(Arena* arena){
     build_path = os_application_path(global_arena);
     saves_path = str8_path_append(global_arena, build_path, str8_literal("saves"));
-    sprites_path = str8_path_append(global_arena, build_path, str8_literal("assets/sprites"));
 }
 
 static void
@@ -203,7 +202,7 @@ static LRESULT win_message_handler_callback(HWND hwnd, u32 message, u64 w_param,
         } break;
 
         case WM_PAINT:{
-            do_one_frame();
+            //do_one_frame();
 
             ValidateRect(hwnd, 0);
         } break;
@@ -414,7 +413,6 @@ draw_entire_ui(void){
         ImVec2 window_size = ImVec2(window.width, window.height);
         ImGui::SetNextWindowSize(window_size, ImGuiCond_Always);
 
-        ScratchArena scratch = begin_scratch();
         Year* year = pm->year;
         MonthInfo* month = year->months + pm->month_tab_idx;
 
@@ -423,6 +421,131 @@ draw_entire_ui(void){
                                      ImGuiWindowFlags_NoMove|
                                      ImGuiWindowFlags_NoTitleBar);
         ImGui::Checkbox("Show Tooltips", &show_tooltips);
+#if DEBUG
+        ImGui::SameLine();
+        if(ImGui::Button("DEBUG##debug")){
+            debug_show_window = !debug_show_window;
+            // note: feels like a dumb solution to size the window once at the start of a session
+            if(debug_show_window && debug_size_window){
+                debug_size_window = false;
+                ImGui::SetNextWindowPos(ImVec2(200, 100), ImGuiCond_Always);
+                ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_Always);
+            }
+        }
+
+        if(debug_show_window){
+            ImGui::Begin("My Window", &debug_show_window); // second param lets user close
+            Arena* scratch_one = scratch_pool[0];
+            Arena* scratch_two = scratch_pool[1];
+            Arena* scratch_three = scratch_pool[2];
+
+            ImGui::PushFont(my_font12);
+            if(debug_show_scratch){
+                fmt = str8_fmt(tm->frame_arena, "%c##debug_show_scratch", icon_lookup[Icon_Collapse]);
+                if(ImGui::Button((char*)fmt.str)){
+                    debug_show_scratch = false;
+                }
+            }
+            else{
+                fmt = str8_fmt(tm->frame_arena, "%c##debug_show_scratch", icon_lookup[Icon_Expand]);
+                if(ImGui::Button((char*)fmt.str)){
+                    debug_show_scratch = true;
+                }
+            }
+            ImGui::PopFont();
+            ImGui::SameLine();
+            ImGui::Text("Scratch Memory");
+
+            if(debug_show_scratch){
+                ImGui::Text("   Scratch Begin/End: %i/%i", begin_scratch_count, end_scratch_count);
+                ImGui::Text("   Scratch One:");
+                ImGui::Text("       %i/%i (%.2f%%)", scratch_one->at, scratch_one->size, 100*((f32)scratch_one->at/(f32)scratch_one->size));
+                ImGui::Text("   Scratch Two:");
+                ImGui::Text("       %i/%i (%.2f%%)", scratch_two->at, scratch_two->size, 100*((f32)scratch_two->at/(f32)scratch_two->size));
+                ImGui::Text("   Scratch Three:");
+                ImGui::Text("       %i/%i (%.2f%%)", scratch_three->at, scratch_three->size, 100*((f32)scratch_three->at/(f32)scratch_three->size));
+            }
+            custom_separator();
+
+            ImGui::PushFont(my_font12);
+            if(debug_show_pm_memory){
+                fmt = str8_fmt(tm->frame_arena, "%c##debug_show_pm_memory", icon_lookup[Icon_Collapse]);
+                if(ImGui::Button((char*)fmt.str)){
+                    debug_show_pm_memory = false;
+                }
+            }
+            else{
+                fmt = str8_fmt(tm->frame_arena, "%c##debug_show_pm_memory", icon_lookup[Icon_Expand]);
+                if(ImGui::Button((char*)fmt.str)){
+                    debug_show_pm_memory = true;
+                }
+            }
+            ImGui::PopFont();
+            ImGui::SameLine();
+            ImGui::Text("Permanent Memory");
+
+            if(debug_show_pm_memory){
+                ImGui::Text("   Arena:");
+                ImGui::Text("       %i/%i (%.2f%%)", pm->arena.at, pm->arena.size, 100*((f32)pm->arena.at/(f32)pm->arena.size));
+                ImGui::Text("       Pools:");
+                ImGui::Text("           category_group_pool:");
+                ImGui::Text("               size: %i", pm->category_group_pool->size);
+                ImGui::Text("               chunk_size: %i", pm->category_group_pool->chunk_size);
+                ImGui::Text("               chunk_total: %i", pm->category_group_pool->chunk_total);
+                ImGui::Text("               chunk_at: %i", pm->category_group_pool->chunk_at);
+                ImGui::Text("           category_pool:");
+                ImGui::Text("               size: %i", pm->category_pool->size);
+                ImGui::Text("               chunk_size: %i", pm->category_pool->chunk_size);
+                ImGui::Text("               chunk_total: %i", pm->category_pool->chunk_total);
+                ImGui::Text("               chunk_at: %i", pm->category_pool->chunk_at);
+                ImGui::Text("           transaction_pool:");
+                ImGui::Text("               size: %i", pm->transaction_pool->size);
+                ImGui::Text("               chunk_size: %i", pm->transaction_pool->chunk_size);
+                ImGui::Text("               chunk_total: %i", pm->transaction_pool->chunk_total);
+                ImGui::Text("               chunk_at: %i", pm->transaction_pool->chunk_at);
+                ImGui::Text("           csv_profile_pool_pool:");
+                ImGui::Text("               size: %i", pm->csv_profile_pool->size);
+                ImGui::Text("               chunk_size: %i", pm->csv_profile_pool->chunk_size);
+                ImGui::Text("               chunk_total: %i", pm->csv_profile_pool->chunk_total);
+                ImGui::Text("               chunk_at: %i", pm->csv_profile_pool->chunk_at);
+                ImGui::Text("           data_arena:");
+                ImGui::Text("               %i/%i (%.2f%%)", pm->arena.at, pm->arena.size, 100*((f32)pm->arena.at/(f32)pm->arena.size));
+            }
+            custom_separator();
+
+            ImGui::PushFont(my_font12);
+            if(debug_show_tm_memory){
+                fmt = str8_fmt(tm->frame_arena, "%c##debug_show_tm_memory", icon_lookup[Icon_Collapse]);
+                if(ImGui::Button((char*)fmt.str)){
+                    debug_show_tm_memory = false;
+                }
+            }
+            else{
+                fmt = str8_fmt(tm->frame_arena, "%c##debug_show_tm_memory", icon_lookup[Icon_Expand]);
+                if(ImGui::Button((char*)fmt.str)){
+                    debug_show_tm_memory = true;
+                }
+            }
+            ImGui::PopFont();
+            ImGui::SameLine();
+            ImGui::Text("Transient Memory");
+
+            if(debug_show_tm_memory){
+                ImGui::Text("   Arena:");
+                ImGui::Text("       %i/%i", tm->arena.at, tm->arena.size);
+                ImGui::Text("       frame_arena:");
+                ImGui::Text("           %i/%i (%.2f%%)", tm->frame_arena->at, tm->frame_arena->size, 100*((f32)tm->frame_arena->at/(f32)tm->frame_arena->size));
+                ImGui::Text("       options_arena:");
+                ImGui::Text("           %i/%i (%.2f%%)", tm->options_arena->at, tm->options_arena->size, 100*((f32)tm->options_arena->at/(f32)tm->options_arena->size));
+
+            }
+
+            ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+            ImGui::End();
+        }
+#endif
+
+        ScratchArena scratch = begin_scratch();
         ImGui::Columns(2);
         ImGui::BeginChild("Child1", ImVec2(0, 0), true);
 
@@ -738,6 +861,7 @@ draw_entire_ui(void){
                 if(pm->category_groups_count < MAX_CATEGORY_GROUP_COUNT){
                     CategoryGroup* category_group = (CategoryGroup*)pool_next(pm->category_group_pool);
                     dll_push_back(pm->month_category_groups, category_group);
+
                     category_group->categories = (Category*)pool_next(pm->category_pool);
                     dll_clear(category_group->categories);
 
@@ -1736,11 +1860,6 @@ draw_entire_ui(void){
                     // note: color selection red if not found in category_group names
                     ImVec4 frame_bg_color = ImGui::GetStyleColorVec4(ImGuiCol_FrameBg);
                     bool found = false;
-                    String8 space = str8_lit("");
-                    String8 baker = str8_lit("BAKER B");
-                    if(str8_contains(merch->description, baker)){
-                        s32 a = 1;
-                    }
                     if(!str8_compare(merch->category, empty_category)){
                         CategoryGroup* category_group = pm->month_category_groups;
                         for(s32 c_idx = 0; c_idx < pm->category_groups_count && !found; ++c_idx){
@@ -2748,10 +2867,6 @@ do_one_frame(void){
                     String8 trans_description = str8_cstring(trans->description);
                     String8 trans_category = str8_cstring(trans->category);
                     for(Merchant* m = pm->merchants; m != 0; m = m->next){
-                        String8 test = str8_lit("Mort");
-                        if(str8_contains(trans_category, test)){
-                            s32 a = 1;
-                        }
                         if(str8_compare(m->description, trans_description)){
                             str8_copy_to_char(trans->category, m->category, m->category.count);
                             break;
@@ -2787,7 +2902,9 @@ do_one_frame(void){
         apply_hidden_transactions = false;
     }
 
-    //ImGui::ShowDemoWindow(); // Show demo window! :)
+#if DEBUG
+    // ImGui::ShowDemoWindow(); // Show demo window! :)
+#endif
     //
 
 	//s32 count = 0;
@@ -2919,7 +3036,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             String8* option = pm->category_list + i;
             option->str = push_array(tm->options_arena, u8, CATEGORY_SIZE);
         }
-        *pm->category_list = str8(" \0", 1);
+        *pm->category_list = str8(" \0", 2);
         pm->default_path = os_application_path(&pm->arena);
 
         pm->draw_month_plan = true;
@@ -3036,7 +3153,9 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             DispatchMessage(&message);
         }
 
+        s32 a = 1;
         do_one_frame();
+        s32 b = 1;
     }
 
     //if(should_quit){

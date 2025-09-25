@@ -32,6 +32,7 @@
 #include "d3d11_init.cpp"
 
 #include "imgui/imgui.h"
+#include "imgui/imgui_internal.h"
 #include "imgui/imgui_impl_win32.h"
 #include "imgui/imgui_impl_dx11.h"
 
@@ -40,11 +41,7 @@
 
 bool do_once = false;
 static String8 build_path;
-static String8 fonts_path;
-static String8 shaders_path;
 static String8 saves_path;
-static String8 sprites_path;
-static String8 sounds_path;
 
 static String8 fmt;
 static RGBA RED;
@@ -155,6 +152,7 @@ global u64 merchant_id = 0;
 typedef struct Merchant{
     Merchant* next;
     u64 id;
+
     String8 description;
     String8 category;
 
@@ -374,7 +372,8 @@ round_to_hundredth(f32 value){
 static bool show_all_merchants = true;
 static bool apply_hidden_transactions = true;
 static bool apply_new_category = false;
-static String8 empty_category = str8_literal(" ");
+static String8 empty_category = str8_literal(" \0");
+static String8 empty_deserialized_category = str8_literal(" \x1B");
 static ImVec4  combo_popup_background_color;
 static ImColor combo_popup_alternating_colors[2];
 static String8 last_combo_name;
@@ -819,6 +818,12 @@ global Rect window_restored_rect;
 global bool show_tooltips = true;
 global bool config_year_idx_deserialized = false;
 
+global bool debug_show_window = false;
+global bool debug_size_window = true;
+global bool debug_show_scratch = false;
+global bool debug_show_pm_memory = false;
+global bool debug_show_tm_memory = false;
+
 static void
 parse_day_month_year(Transaction* trans){
     ScratchArena scratch = begin_scratch();
@@ -876,8 +881,6 @@ parse_day_month_year(Transaction* trans){
 
 static bool
 test_date_against_format(String8 date){
-    ScratchArena scratch = begin_scratch();
-    defer(end_scratch(scratch));
 
     CSV_Profile* profile = pm->csv_profile;
     char delimiter = date_delimiters[profile->date_format_kind];
@@ -886,6 +889,7 @@ test_date_against_format(String8 date){
         return(false);
     }
 
+    ScratchArena scratch = begin_scratch();
     String8Node* date_parts = str8_split(scratch.arena, date, delimiter);
 
     String8 dd, mm, yyyy;
@@ -911,6 +915,7 @@ test_date_against_format(String8 date){
     }
 
     if(dd.count > 2 || mm.count > 2 || yyyy.count != 4){
+        end_scratch(scratch);
         return(false);
     }
 
@@ -918,9 +923,11 @@ test_date_against_format(String8 date){
     s32 date_month_value = atoi((char*)mm.str);
     s32 date_year_value  = atoi((char*)yyyy.str);
     if(date_day_value > 31 || date_month_value > 12){
+        end_scratch(scratch);
         return(false);
     }
 
+    end_scratch(scratch);
     return(true);
 }
 
@@ -1129,7 +1136,7 @@ deserialize_csv(String8 full_path){
 
                 memcpy(merch->category.str, empty_category.str, empty_category.count);
                 merch->category.count = empty_category.count;
-                merch->category.str[merch->category.count] = '\0';
+                //merch->category.str[merch->category.count] = '\0';
 
                 trans->merchant_id = merch->id;
             }
@@ -1141,13 +1148,11 @@ deserialize_csv(String8 full_path){
                 year = pm->year;
                 month = pm->year->months + pm->mm_s32 - 1;
 
-                ScratchArena scratch = begin_scratch();
                 String8 result = str8_concat(scratch.arena, pm->yyyy, str8_literal("-"));
                 result = str8_concat(scratch.arena, result, pm->mm);
                 result = str8_concat(scratch.arena, result, str8_literal("-"));
                 result = str8_concat(scratch.arena, result, pm->dd);
                 str8_copy_to_char(trans->date, result, TRANS_DESCRIPTION_SIZE);
-                end_scratch(scratch);
             }
 
             // we still want to add the transaction even if the date wasnt found, just for the year selected
@@ -1444,13 +1449,19 @@ deserialize_config(void){
 
                     if(str8_compare(key, str8_literal("description"))){
                         memcpy(merch->description.str, value.str, value.count);
-                        merch->description.count = value.count;
+                        merch->description.count = value.count - 1;
                         merch->description.str[merch->description.count] = '\0';
                     }
                     else if(str8_compare(key, str8_literal("category"))){
                         memcpy(merch->category.str, value.str, value.count);
-                        merch->category.count = value.count;
-                        merch->category.str[merch->category.count] = '\0';
+                        if(str8_compare(value, empty_deserialized_category)){
+                            merch->category.count = value.count;
+                            merch->category.str[merch->category.count - 1] = '\0';
+                        }
+                        else{
+                            merch->category.count = value.count - 1;
+                            merch->category.str[merch->category.count] = '\0';
+                        }
                     }
                     else if(str8_compare(key, str8_literal("hidden"))){
                         merch->hidden = atoi((char*)value.str);
@@ -1531,9 +1542,9 @@ serialize_config(void){
     if(file.handle != INVALID_HANDLE_VALUE){
         os_file_write(file, arena->base, arena->at);
     }
-
     os_file_close(file);
     end_scratch(scratch);
+
     arena_free(pm->data_arena);
 }
 
@@ -1545,7 +1556,8 @@ deserialize_year(Year* year){
     String8 full_path = str8_path_append(scratch.arena, saves_path, filename);
 
     // todo(rr): I think I prefer this check to encapsulate the function on the outside, just create the path and check it out side the function. This should be called if we know we can serialize, and then it doesn't hide the check.
-    if(!os_file_exists(saves_path, filename)){
+    if(!os_path_exists(full_path)){
+        end_scratch(scratch);
         return;
     }
 
@@ -1653,33 +1665,34 @@ deserialize_year(Year* year){
                 }
             }
 
+            // deserialize_year
             // todo: temporary, remove this once merchant stuff is done.
-            bool found = false;
-            for(Merchant* merch = pm->merchants; merch != 0; merch = merch->next){
-                if(str8_compare(merch->description, description_str)){
-                    trans->merchant_id = merch->id;
-                    found = true;
-                    break;
-                }
-            }
-            if(!found){
-                Merchant* merch = push_struct(&pm->arena, Merchant);
-                sll_push_front(pm->merchants, merch);
+            //bool found = false;
+            //for(Merchant* merch = pm->merchants; merch != 0; merch = merch->next){
+            //    if(str8_compare(merch->description, description_str)){
+            //        trans->merchant_id = merch->id;
+            //        found = true;
+            //        break;
+            //    }
+            //}
+            //if(!found){
+            //    Merchant* merch = push_struct(&pm->arena, Merchant);
+            //    sll_push_front(pm->merchants, merch);
 
-                merch->description.str = push_array(&pm->arena, u8, TRANS_DESCRIPTION_SIZE);
-                merch->category.str = push_array(&pm->arena, u8, TRANS_CATEGORY_SIZE);
-                merch->id = merchant_id++;
+            //    merch->description.str = push_array(&pm->arena, u8, TRANS_DESCRIPTION_SIZE);
+            //    merch->category.str = push_array(&pm->arena, u8, TRANS_CATEGORY_SIZE);
+            //    merch->id = merchant_id++;
 
-                memcpy(merch->description.str, description_str.str, description_str.count);
-                merch->description.count = description_str.count;
-                merch->description.str[merch->description.count] = '\0';
+            //    memcpy(merch->description.str, description_str.str, description_str.count);
+            //    merch->description.count = description_str.count;
+            //    merch->description.str[merch->description.count] = '\0';
 
-                memcpy(merch->category.str, empty_category.str, empty_category.count);
-                merch->category.count = empty_category.count;
-                merch->category.str[merch->category.count] = '\0';
+            //    memcpy(merch->category.str, empty_category.str, empty_category.count);
+            //    merch->category.count = empty_category.count;
+            //    merch->category.str[merch->category.count] = '\0';
 
-                trans->merchant_id = merch->id;
-            }
+            //    trans->merchant_id = merch->id;
+            //}
         }
     }
 
@@ -1715,7 +1728,6 @@ serialize_year(Year* year){
         arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "\0");
 
         String8 full_path = str8_path_append(scratch.arena, saves_path, filename);
-
         File file = os_file_open(full_path, GENERIC_WRITE, CREATE_ALWAYS);
         if(file.handle != INVALID_HANDLE_VALUE){
             os_file_write(file, arena->base, arena->at);
@@ -1873,12 +1885,10 @@ serialize_budget(void){
                                   "\tname=%s\x1B planned=%s muted=%i\n", c->name, c->planned, c->muted);
         }
     }
-
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "\0");
 
     ScratchArena scratch = begin_scratch();
     String8 full_path = str8_path_append(scratch.arena, saves_path, str8_literal("budget.b"));
-
     File file = os_file_open(full_path, GENERIC_WRITE, CREATE_ALWAYS);
     if(file.handle != INVALID_HANDLE_VALUE){
         os_file_write(file, arena->base, arena->at);
