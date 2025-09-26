@@ -195,6 +195,8 @@ typedef struct MonthInfo{
 
     Totals totals;
     bool muted;
+    bool locked;
+    bool hidden;
 } MonthInfo;
 
 #define MAX_YEAR_COUNT 128
@@ -655,7 +657,6 @@ char_compare(char* left, char* right){
     return(true);
 }
 
-// todo: remove this once you change to str8 for everything
 static bool
 char_only_spaces(char* src){
     u32 count = 0;
@@ -667,7 +668,6 @@ char_only_spaces(char* src){
     return(true);
 }
 
-// todo: remove this once you change to str8 for everything
 static void
 str8_copy_to_char(char* c, String8 string, s32 max_size){
     s32 smallest_size = max_size <= string.size ? max_size : string.size;
@@ -823,6 +823,8 @@ global bool debug_size_window = true;
 global bool debug_show_scratch = false;
 global bool debug_show_pm_memory = false;
 global bool debug_show_tm_memory = false;
+
+global s32 lock_button_width = 0.0f;
 
 static void
 parse_day_month_year(Transaction* trans){
@@ -1610,6 +1612,12 @@ deserialize_year(Year* year){
                     if(str8_compare(key, str8_literal("muted"))){
                         month->muted = atoi((char*)value.str);
                     }
+                    else if(str8_compare(key, str8_literal("locked"))){
+                        month->locked = atoi((char*)value.str);
+                    }
+                    else if(str8_compare(key, str8_literal("hidden"))){
+                        month->hidden = atoi((char*)value.str);
+                    }
                 }
             }
             tps = TransactionParsingState_Transaction;
@@ -1661,6 +1669,9 @@ deserialize_year(Year* year){
                     }
                     else if(str8_compare(key, str8_literal("locked"))){
                         trans->locked = atoi((char*)value.str);
+                    }
+                    else if(str8_compare(key, str8_literal("merchant_id"))){
+                        trans->merchant_id = strtoull((char*)value.str, 0, 10);
                     }
                 }
             }
@@ -1714,14 +1725,14 @@ serialize_year(Year* year){
         for(s32 m_idx=0; m_idx < Month_Count; ++m_idx){
             month = year->months + m_idx;
             arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#month_m%i\n", m_idx);
-            arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "muted=%i\n", month->muted);
+            arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "muted=%i\x1B locked=%i\x1B hidden=%i\n", month->muted, month->hidden, month->locked);
 
             Transaction* t = month->transactions;
             for(s32 t_idx = 0; t_idx < month->transaction_count; ++t_idx){
                 t = t->next;
                 arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
-                                      "date=%s\x1B amount=%s\x1B description=%s\x1B category=%s\x1B muted=%i\x1B hidden=%i\x1B locked=%i\n",
-                                      t->date, t->amount, t->description, t->category, t->muted, t->hidden, t->locked);
+                                      "date=%s\x1B amount=%s\x1B description=%s\x1B category=%s\x1B muted=%i\x1B hidden=%i\x1B locked=%i\x1B merchant_id=%llu\n",
+                                      t->date, t->amount, t->description, t->category, t->muted, t->hidden, t->locked, t->merchant_id);
             }
         }
 

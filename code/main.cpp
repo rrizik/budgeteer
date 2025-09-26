@@ -996,7 +996,7 @@ draw_entire_ui(void){
                 ImGui::SetCursorPosX(m_column_start);
                 ImGui::PushID(c_idx);
                 if(category_group->muted){
-                    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(RED.r, RED.g, RED.b, 255));
+                    ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(RED.r, RED.g, RED.b, 255));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.1f, 0.0f, 1.0f));
                 }
                 else{
@@ -1121,7 +1121,7 @@ draw_entire_ui(void){
                         ImGui::SetCursorPosX(m_column_start);
                         ImGui::PushID(uid);
                         if(category->muted){
-                            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(RED.r, RED.g, RED.b, 255));
+                            ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(RED.r, RED.g, RED.b, 255));
                             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.1f, 0.0f, 1.0f));
                         }
                         else{
@@ -1810,13 +1810,26 @@ draw_entire_ui(void){
 
                 ImGui::TableSetupColumn("Description");
                 ImGui::TableSetupColumn("Category");
-                ImGui::TableSetupColumn("Actions");
+                ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_NoHeaderLabel);
 
                 // Note: Populate table header.
                 ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
                 for(s32 column = 0; column < 3; ++column){
                     ImGui::TableSetColumnIndex(column);
                     ImGui::TableHeader(ImGui::TableGetColumnName(column));
+                    //if(column < 2){
+                    //    ImGui::TableHeader(ImGui::TableGetColumnName(column));
+                    //}
+                    //else{
+                    //    // delet all
+                    //    {
+                    //        if(ImGui::Button("x##delete_all_merchants")){
+                    //            for(Merchant* merch = pm->merchants; merch != 0; merch = merch->next){
+                    //            }
+                    //        }
+                    //        tooltip(str8_literal("Delete All Merchants."));
+                    //    }
+                    //}
                 }
 
                 // Note: Sort columns when clicking on headers
@@ -2189,82 +2202,160 @@ draw_entire_ui(void){
                     ImGui::TableHeader(ImGui::TableGetColumnName(column));
                 }
                 else{
-                    if(ImGui::Button("+##add_transaction_button")){
-                        if(pm->total_transaction_count < MAX_TRANSACTION_COUNT){
-                            Transaction* trans = (Transaction*)pool_next(pm->transaction_pool);
-                            dll_push_back(month->transactions, trans);
-
-                            if(month->transaction_count == 0){
-                                fmt = str8_fmt(scratch.arena, "01/01/%04d", year->number);
-                                memcpy((void*)trans->date, (void*)fmt.str, fmt.size);
-                            }
-                            else{
-                                Transaction* last = trans->prev;
-                                s32 date_length = (s32)char_length(last->date);
-                                String8 date_str8 = str8(last->date, date_length);
-                                String8Node* parts = str8_split(scratch.arena, date_str8, '/');
-                                parts->prev->str = str8_fmt(scratch.arena, "%04d", year->number);
-
-                                String8Join join = {0};
-                                join.mid = str8_literal("/");
-                                String8 result = str8_join(scratch.arena, parts, join);
-                                memcpy((void*)trans->date, (void*)result.str, result.count);
-                            }
-                            memcpy((void*)trans->category, (void*)pm->category_list->str, pm->category_list->size);
-
-                            ++month->transaction_count;
-                            ++year->transaction_count;
-                            ++pm->total_transaction_count;
-                        }
-                    }
-                    tooltip(str8_literal("Add Transaction."));
-
-                    ImGui::SameLine();
-                    if(ImGui::Button("x##delete_all_transactions123")){
-                        Transaction* t = month->transactions;
-                        for(s32 t_idx=0; t_idx < month->transaction_count; ++t_idx){
-                            t = t->next;
-                            dll_remove(t);
-                            pool_free(pm->transaction_pool, t);
-                            t = month->transactions;
-                        }
-                        dll_clear(month->transactions);
-                        pm->total_transaction_count -= month->transaction_count;
-                        year->transaction_count -= month->transaction_count;
-                        month->transaction_count = 0;
-                    }
-                    tooltip(str8_literal("Delete All Transactions."));
-
-                    ImGui::SameLine();
-                    ImGui::PushID(100000);
-                    if(month->muted){
-                        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(RED.r, RED.g, RED.b, 255));
-                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.1f, 0.0f, 1.0f));
-                    }
-                    else{
-                        ImGui::PushStyleColor(ImGuiCol_Button, pm->default_button_color);
-                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, pm->default_button_hovered_color);
-                    }
-                    if(ImGui::Button("m##mute_month123")){
-                        month->muted = !month->muted;
-                        if(month->muted){
-                            Transaction* trans = month->transactions;
-                            for(s32 t_idx = 0; t_idx < month->transaction_count; ++t_idx){
-                                trans = trans->next;
-                                trans->muted = true;
-                            }
+                    // lock all
+                    {
+                        ImGui::PushID(100001);
+                        if(month->locked){
+                            ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(RED.r, RED.g, RED.b, 255));
+                            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.5f, 0.0f, 1.0f));
                         }
                         else{
+                            ImGui::PushStyleColor(ImGuiCol_Button, pm->default_button_color);
+                            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, pm->default_button_hovered_color);
+                        }
+
+                        ImGui::PushFont(my_font12);
+                        if(month->locked){
+                            fmt = str8_fmt(tm->frame_arena, "%c##lock_all", icon_lookup[Icon_Locked]);
+                        }
+                        else{
+                            fmt = str8_fmt(tm->frame_arena, "%c##lock_all", icon_lookup[Icon_Unlocked]);
+                        }
+                        if(ImGui::Button((char*)fmt.str, ImVec2(lock_button_width, 0.0f))){
+                            month->locked = !month->locked;
+
+                            if(month->locked){
+                                Transaction* trans = month->transactions;
+                                for(s32 t_idx = 0; t_idx < month->transaction_count; ++t_idx){
+                                    trans = trans->next;
+                                    trans->locked = true;
+                                }
+                            }
+                            else{
+                                apply_new_category = true;
+
+                                Transaction* trans = month->transactions;
+                                for(s32 t_idx = 0; t_idx < month->transaction_count; ++t_idx){
+                                    trans = trans->next;
+                                    trans->locked = false;
+                                }
+                            }
+                        }
+                        tooltip(str8_literal("Lock/Unlock All Transactions."));
+                        ImGui::PopStyleColor(2);
+                        ImGui::PopID();
+                        ImGui::PopFont();
+                    }
+                    {
+                        ImGui::SameLine();
+                        ImGui::PushFont(my_font12);
+                        fmt = str8_fmt(tm->frame_arena, "%c##hide_all_transaction", icon_lookup[Icon_Hide]);
+                        if(ImGui::Button((char*)fmt.str)){
                             Transaction* trans = month->transactions;
                             for(s32 t_idx = 0; t_idx < month->transaction_count; ++t_idx){
                                 trans = trans->next;
-                                trans->muted = false;
+
+                                String8 trans_description = str8_cstring(trans->description);
+                                for(Merchant* m = pm->merchants; m != 0; m = m->next){
+                                    if(str8_compare(m->description, trans_description)){
+                                        m->hidden = true;
+                                        apply_hidden_transactions = true;
+                                        break;
+                                    }
+                                }
                             }
                         }
+                        ImGui::PopFont();
+                        tooltip(str8_literal("Hide all merchants in month from budget."));
                     }
-                    tooltip(str8_literal("Mute All Transactions."));
-                    ImGui::PopStyleColor(2);
-                    ImGui::PopID();
+
+                    // mute all
+                    {
+                        ImGui::SameLine();
+                        ImGui::PushID(100000);
+                        if(month->muted){
+                            ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(RED.r, RED.g, RED.b, 255));
+                            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.1f, 0.0f, 1.0f));
+                        }
+                        else{
+                            ImGui::PushStyleColor(ImGuiCol_Button, pm->default_button_color);
+                            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, pm->default_button_hovered_color);
+                        }
+                        if(ImGui::Button("m##mute_month123")){
+                            month->muted = !month->muted;
+                            if(month->muted){
+                                Transaction* trans = month->transactions;
+                                for(s32 t_idx = 0; t_idx < month->transaction_count; ++t_idx){
+                                    trans = trans->next;
+                                    trans->muted = true;
+                                }
+                            }
+                            else{
+                                Transaction* trans = month->transactions;
+                                for(s32 t_idx = 0; t_idx < month->transaction_count; ++t_idx){
+                                    trans = trans->next;
+                                    trans->muted = false;
+                                }
+                            }
+                        }
+                        tooltip(str8_literal("Mute All Transactions."));
+                        ImGui::PopStyleColor(2);
+                        ImGui::PopID();
+                    }
+
+                    // delet all
+                    {
+                        ImGui::SameLine();
+                        if(ImGui::Button("x##delete_all_transactions123")){
+                            Transaction* t = month->transactions;
+                            for(s32 t_idx=0; t_idx < month->transaction_count; ++t_idx){
+                                t = t->next;
+                                dll_remove(t);
+                                pool_free(pm->transaction_pool, t);
+                                t = month->transactions;
+                            }
+                            dll_clear(month->transactions);
+                            pm->total_transaction_count -= month->transaction_count;
+                            year->transaction_count -= month->transaction_count;
+                            month->transaction_count = 0;
+                        }
+                        tooltip(str8_literal("Delete All Transactions."));
+                    }
+
+                    // add transaction
+                    {
+                        ImGui::SameLine();
+                        if(ImGui::Button("+##add_transaction_button")){
+                            if(pm->total_transaction_count < MAX_TRANSACTION_COUNT){
+                                Transaction* trans = (Transaction*)pool_next(pm->transaction_pool);
+                                dll_push_back(month->transactions, trans);
+
+                                if(month->transaction_count == 0){
+                                    fmt = str8_fmt(scratch.arena, "01/01/%04d", year->number);
+                                    memcpy((void*)trans->date, (void*)fmt.str, fmt.size);
+                                }
+                                else{
+                                    Transaction* last = trans->prev;
+                                    s32 date_length = (s32)char_length(last->date);
+                                    String8 date_str8 = str8(last->date, date_length);
+                                    String8Node* parts = str8_split(scratch.arena, date_str8, '/');
+                                    parts->prev->str = str8_fmt(scratch.arena, "%04d", year->number);
+
+                                    String8Join join = {0};
+                                    join.mid = str8_literal("/");
+                                    String8 result = str8_join(scratch.arena, parts, join);
+                                    memcpy((void*)trans->date, (void*)result.str, result.count);
+                                }
+                                memcpy((void*)trans->category, (void*)pm->category_list->str, pm->category_list->size);
+
+                                ++month->transaction_count;
+                                ++year->transaction_count;
+                                ++pm->total_transaction_count;
+                            }
+                        }
+                        tooltip(str8_literal("Add Transaction."));
+                    }
+
                 }
             }
 
@@ -2453,38 +2544,38 @@ draw_entire_ui(void){
                 {
                     ImGui::TableNextColumn();
 
-                    // note: Aliging my buttons, maybe I'll remove + add_transaction later and I won't need this.
-                    ImGui::Dummy(ImVec2(15.0f, 0));
-                    ImGui::SameLine();
-                    fmt = str8_fmt(scratch.arena, "x##delete_transaction%i", idx);
-                    if(ImGui::Button((char*)fmt.data)){
-                        --month->transaction_count;
-                        --year->transaction_count;
-                        --pm->total_transaction_count;
-
-                        dll_remove(trans);
-                        pool_free(pm->transaction_pool, trans);
-                    }
-                    tooltip(str8_literal("Delete Transaction."));
-
-                    ImGui::SameLine();
-                    ImGui::PushID(idx);
-                    if(trans->muted){
-                        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(RED.r, RED.g, RED.b, 255));
-                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.1f, 0.0f, 1.0f));
+                    if(trans->locked){
+                        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(RED.r, RED.g, RED.b, 255));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.5f, 0.0f, 1.0f));
                     }
                     else{
                         ImGui::PushStyleColor(ImGuiCol_Button, pm->default_button_color);
                         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, pm->default_button_hovered_color);
                     }
-                    if(ImGui::Button("m##mute_transaction")){
-                        trans->muted = !trans->muted;
-                    }
-                    tooltip(str8_literal("Mute Transaction."));
-                    ImGui::PopStyleColor(2);
-                    ImGui::PopID();
 
+                    ImGui::PushFont(my_font12);
+                    if(trans->locked){
+                        fmt = str8_fmt(tm->frame_arena, "%c##lock_category%i", icon_lookup[Icon_Locked], idx);
+                    }
+                    else{
+                        fmt = str8_fmt(tm->frame_arena, "%c##lock_category%i", icon_lookup[Icon_Unlocked], idx);
+                    }
+                    if(ImGui::Button((char*)fmt.str, ImVec2(lock_button_width, 0.0f))){
+                        trans->locked = !trans->locked;
+                        if(!trans->locked){
+                            apply_new_category = true;
+                        }
+                    }
+                    ImGui::PopStyleColor(2);
+                    ImGui::PopFont();
+                    if(trans->locked){
+                        tooltip(str8_literal("Unlock category so affects the other transactions when a category is change."));
+                    }
+                    else{
+                        tooltip(str8_literal("Lock category so it doesn't affect the other transactions when a category is change."));
+                    }
                     ImGui::SameLine();
+
                     ImGui::PushFont(my_font12);
                     fmt = str8_fmt(tm->frame_arena, "%c##hide_transaction%i", icon_lookup[Icon_Hide], idx);
                     if(ImGui::Button((char*)fmt.str)){
@@ -2499,23 +2590,35 @@ draw_entire_ui(void){
                     }
                     ImGui::PopFont();
                     tooltip(str8_literal("Hide merchant from budget."));
-
                     ImGui::SameLine();
-                    ImGui::PushFont(my_font12);
-                    if(trans->locked){
-                        fmt = str8_fmt(tm->frame_arena, "%c##lock_category%i", icon_lookup[Icon_Locked], idx);
+
+                    ImGui::PushID(idx);
+                    if(trans->muted){
+                        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(RED.r, RED.g, RED.b, 255));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.1f, 0.0f, 1.0f));
                     }
                     else{
-                        fmt = str8_fmt(tm->frame_arena, "%c##lock_category%i", icon_lookup[Icon_Unlocked], idx);
+                        ImGui::PushStyleColor(ImGuiCol_Button, pm->default_button_color);
+                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, pm->default_button_hovered_color);
                     }
-                    if(ImGui::Button((char*)fmt.str)){
-                        trans->locked = !trans->locked;
-                        if(!trans->locked){
-                            apply_new_category = true;
-                        }
+                    if(ImGui::Button("m##mute_transaction")){
+                        trans->muted = !trans->muted;
                     }
-                    ImGui::PopFont();
-                    tooltip(str8_literal("Lock category so it doesn't affect the other transactions from a category change."));
+                    tooltip(str8_literal("Mute Transaction."));
+                    ImGui::PopStyleColor(2);
+                    ImGui::PopID();
+                    ImGui::SameLine();
+
+                    fmt = str8_fmt(scratch.arena, "x##delete_transaction%i", idx);
+                    if(ImGui::Button((char*)fmt.data)){
+                        --month->transaction_count;
+                        --year->transaction_count;
+                        --pm->total_transaction_count;
+
+                        dll_remove(trans);
+                        pool_free(pm->transaction_pool, trans);
+                    }
+                    tooltip(str8_literal("Delete Transaction."));
                 }
             }
 
@@ -2802,16 +2905,21 @@ collect_totals_for_months(void){
         MonthInfo* month = pm->year->months + m_idx;
 
         bool all_muted = true;
+        bool all_locked = true;
         Transaction* trans = month->transactions;
         for(s32 t_idx = 0; t_idx < month->transaction_count; ++t_idx){
             trans = trans->next;
             if(!trans->muted){
                 all_muted = false;
-                break;
+            }
+
+            if(!trans->locked){
+                all_locked = false;
             }
         }
 
         month->muted = all_muted;
+        month->locked = all_locked;
     }
 
 }
@@ -2869,6 +2977,7 @@ do_one_frame(void){
                     for(Merchant* m = pm->merchants; m != 0; m = m->next){
                         if(str8_compare(m->description, trans_description)){
                             str8_copy_to_char(trans->category, m->category, m->category.count);
+                            trans->merchant_id = m->id;
                             break;
                         }
                     }
@@ -3141,6 +3250,16 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         };
         RED = linear_from_srgb(RED);
         RED = RGBA_1_to_255(RED);
+
+        ImGui::PushFont(my_font12);
+        ScratchArena scratch = begin_scratch();
+        fmt = str8_fmt(scratch.arena, "%c", icon_lookup[Icon_Unlocked]);
+        ImVec2 size = ImGui::CalcTextSize((char*)fmt.str);
+        const ImGuiStyle& style = ImGui::GetStyle();
+        lock_button_width = size.x + (style.FramePadding.x * 2.0f);
+        ImGui::PopFont();
+        end_scratch(scratch);
+
         memory.initialized = true;
     }
 
