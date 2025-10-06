@@ -149,12 +149,13 @@ typedef struct CategoryGroup{
 
 global u64 merchant_id = 0;
 #define MERCH_DESCRIPTION_SIZE 1024
+#define MERCH_CATEGORY_SIZE 1024
 typedef struct Merchant{
     Merchant* next;
     u64 id;
 
-    String8 description;
-    String8 category;
+    char description[MERCH_DESCRIPTION_SIZE];
+    char category[MERCH_CATEGORY_SIZE];
 
     bool hidden;
 } Merchant;
@@ -532,7 +533,7 @@ dll_bubble_sort_description_merch(Merchant** head, bool ascending=false){
             Merchant* a = *node;
             Merchant* b = a->next;
 
-            s32 result = strcmp((char*)a->description.str, (char*)b->description.str);
+            s32 result = strcmp(a->description, b->description);
             bool out_of_order = ascending ? (result > 0) : (result < 0);
             if(out_of_order){
                 a->next = b->next;
@@ -558,7 +559,7 @@ dll_bubble_sort_category_merch(Merchant** head, bool ascending=false){
             Merchant* a = *node;
             Merchant* b = a->next;
 
-            s32 result = strcmp((char*)a->category.str, (char*)b->category.str);
+            s32 result = strcmp(a->category, b->category);
             bool out_of_order = ascending ? (result > 0) : (result < 0);
             if(out_of_order){
                 a->next = b->next;
@@ -668,18 +669,26 @@ char_only_spaces(char* src){
     return(true);
 }
 
-static void
-str8_copy_to_char(char* c, String8 string, s32 max_size){
-    s32 smallest_size = max_size <= string.size ? max_size : string.size;
-    for(s32 i=0; i < smallest_size; ++i){
-        c[i] = string.str[i];
+static u32
+str8_copy_to_char(char* dst, String8 src, u32 max_size){
+    if(!dst || src.count == 0) return(0);
+
+    s32 wrote_count = MIN(max_size, src.size);
+    for(s32 i=0; i < wrote_count; ++i){
+        dst[i] = src.str[i];
     }
-    c[string.size] = '\0';
+    dst[wrote_count] = 0;
+
+    return(wrote_count);
+    //for(s32 i=0; i < wrote_count; ++i){
+    //    c[i] = src.str[i];
+    //}
+    //c[src.size] = '\0';
 
     // todo(rr): do I need this?
-    if(c[string.size - 1] == '\n' || c[string.size - 1] == '\x1B'){
-        c[string.size - 1] = '\0';
-    }
+    //if(c[src.size - 1] == '\n' || c[src.size - 1] == '\x1B'){
+    //    c[src.size - 1] = '\0';
+    //}
 }
 
 // todo: Get rid of this.
@@ -1118,7 +1127,8 @@ deserialize_csv(String8 full_path){
             // speed: this can be hashed later if its an issue.
             bool found = false;
             for(Merchant* merch = pm->merchants; merch != 0; merch = merch->next){
-                if(str8_compare(merch->description, description_str)){
+                String8 merch_description = str8_cstring(merch->description);
+                if(str8_compare(merch_description, description_str)){
                     trans->merchant_id = merch->id;
                     found = true;
                     break;
@@ -1128,16 +1138,18 @@ deserialize_csv(String8 full_path){
                 Merchant* merch = push_struct(&pm->arena, Merchant);
                 sll_push_front(pm->merchants, merch);
 
-                merch->description.str = push_array(&pm->arena, u8, TRANS_DESCRIPTION_SIZE);
-                merch->category.str = push_array(&pm->arena, u8, TRANS_CATEGORY_SIZE);
+                str8_copy_to_char(merch->description, description_str, MERCH_DESCRIPTION_SIZE);
+                str8_copy_to_char(merch->category, empty_category, empty_category.count);
+                //merch->description.str = push_array(&pm->arena, u8, TRANS_DESCRIPTION_SIZE);
+                //merch->category.str = push_array(&pm->arena, u8, TRANS_CATEGORY_SIZE);
                 merch->id = merchant_id++;
 
-                memcpy(merch->description.str, description_str.str, description_str.count);
-                merch->description.count = description_str.count;
-                merch->description.str[merch->description.count] = '\0';
+                //memcpy(merch->description.str, description_str.str, description_str.count);
+                //merch->description.count = description_str.count;
+                //merch->description.str[merch->description.count] = '\0';
 
-                memcpy(merch->category.str, empty_category.str, empty_category.count);
-                merch->category.count = empty_category.count;
+                //memcpy(merch->category.str, empty_category.str, empty_category.count);
+                //merch->category.count = empty_category.count;
                 //merch->category.str[merch->category.count] = '\0';
 
                 trans->merchant_id = merch->id;
@@ -1434,8 +1446,9 @@ deserialize_config(void){
         else if(cps == ConfigParsingState_Merchants){
             Merchant* merch = push_struct(&pm->arena, Merchant);
             sll_push_front(pm->merchants, merch);
-            merch->description.str = push_array(&pm->arena, u8, TRANS_DESCRIPTION_SIZE);
-            merch->category.str = push_array(&pm->arena, u8, TRANS_CATEGORY_SIZE);
+            str8_copy_to_char(merch->category, empty_category, empty_category.count);
+            //merch->description.str = push_array(&pm->arena, u8, TRANS_DESCRIPTION_SIZE);
+            //merch->category.str = push_array(&pm->arena, u8, TRANS_CATEGORY_SIZE);
             merch->id = merchant_id++;
 
             while(line.size){
@@ -1450,20 +1463,22 @@ deserialize_config(void){
                     String8 value = str8_node->prev->str;
 
                     if(str8_compare(key, str8_literal("description"))){
-                        memcpy(merch->description.str, value.str, value.count);
-                        merch->description.count = value.count - 1;
-                        merch->description.str[merch->description.count] = '\0';
+                        str8_copy_to_char(merch->description, value, value.count);
+                        //memcpy(merch->description.str, value.str, value.count);
+                        //merch->description.count = value.count - 1;
+                        //merch->description.str[merch->description.count] = '\0';
                     }
                     else if(str8_compare(key, str8_literal("category"))){
-                        memcpy(merch->category.str, value.str, value.count);
-                        if(str8_compare(value, empty_deserialized_category)){
-                            merch->category.count = value.count;
-                            merch->category.str[merch->category.count - 1] = '\0';
-                        }
-                        else{
-                            merch->category.count = value.count - 1;
-                            merch->category.str[merch->category.count] = '\0';
-                        }
+                        str8_copy_to_char(merch->category, value, value.count);
+                        //memcpy(merch->category.str, value.str, value.count);
+                        //if(str8_compare(value, empty_deserialized_category)){
+                        //    merch->category.count = value.count;
+                        //    merch->category.str[merch->category.count - 1] = '\0';
+                        //}
+                        //else{
+                        //    merch->category.count = value.count - 1;
+                        //    merch->category.str[merch->category.count] = '\0';
+                        //}
                     }
                     else if(str8_compare(key, str8_literal("hidden"))){
                         merch->hidden = atoi((char*)value.str);
@@ -1531,9 +1546,11 @@ serialize_config(void){
     // merchants
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "#merchants\n");
     for(Merchant* merch = pm->merchants; merch != 0; merch = merch->next){
-        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at,
-                "description=%s\x1B category=%s\x1B hidden=%i\n",
-                (char*)merch->description.str, (char*)merch->category.str, merch->hidden);
+        arena->at += snprintf(
+            (char*)arena->base + arena->at, arena->size - arena->at,
+            "description=%s\x1B category=%s\x1B hidden=%i\n",
+            merch->description, merch->category, merch->hidden
+        );
     }
 
     arena->at += snprintf((char*)arena->base + arena->at, arena->size - (s32)arena->at, "\0");
@@ -1748,14 +1765,60 @@ serialize_year(Year* year){
         arena_free(pm->data_arena);
     }
     else{
-        if(os_file_exists(saves_path, filename)){
-            if(!os_file_delete(saves_path, filename)){
-                print_last_error(GetLastError());
-                assert(1==0); // todo(rr): temporary assert to make sure things are working correctly
-            }
-        }
+        // always try and delete
+        os_file_delete(saves_path, filename);
     }
     end_scratch(scratch);
+}
+
+static f32
+best_fit(String8 a, String8 b){
+    f32 result = 0.0f;
+
+    s32 count = 0;
+    for(s32 i=0; i < a.length; ++i){
+        if(a.str[i] == b.str[i]){
+            count++;
+        }
+    }
+    result = 100 * ((f32)count / (f32)a.length);
+    return(result);
+}
+
+typedef struct Fit{
+    String8 str;
+    f32 amount;
+} Fit;
+
+static void
+test_merchants(void){
+    Fit fit[1024];
+
+    s32 count = 0;
+    for(Merchant* first = pm->merchants; first != 0; first = first->next){
+        print("%s\n", first->description.str);
+        for(Merchant* second = pm->merchants; second != 0; second = second->next){
+            String8 a = str8_cstring(first->description);
+            String8 b = str8_cstring(second->description);
+            f32 result = best_fit(a, b);
+            if(result > 50.0f){
+                Fit f = {
+                    .str = b.description,
+                    .amount = result,
+                };
+                fit[count++] = f;
+            }
+        }
+        //if(count > 1){
+        //    print("%i-------------------------\n", count);
+        //    print("%s\n", first->description.str);
+        //    print("-------------------------\n");
+        //    for(s32 i=0; i < count; ++i){
+        //        print("%s [%.2f]\n", fit[i].str.str, fit[i].amount);
+        //    }
+        //}
+        count = 0;
+    }
 }
 
 static void

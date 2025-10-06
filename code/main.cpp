@@ -112,6 +112,9 @@ static void
 init_paths(Arena* arena){
     build_path = os_application_path(global_arena);
     saves_path = str8_path_append(global_arena, build_path, str8_literal("saves"));
+    if(!os_path_exists(saves_path)){
+        os_dir_create(saves_path);
+    }
 }
 
 static void
@@ -1858,6 +1861,7 @@ draw_entire_ui(void){
                     if(!show_all_merchants && !merch->hidden){
                         continue;
                     }
+                    String8 merch_category = str8_cstring(merch->category);
 
                     ImGui::TableNextRow();
 
@@ -1873,7 +1877,7 @@ draw_entire_ui(void){
                     // note: color selection red if not found in category_group names
                     ImVec4 frame_bg_color = ImGui::GetStyleColorVec4(ImGuiCol_FrameBg);
                     bool found = false;
-                    if(!str8_compare(merch->category, empty_category)){
+                    if(!str8_compare(merch_category, empty_category)){
                         CategoryGroup* category_group = pm->month_category_groups;
                         for(s32 c_idx = 0; c_idx < pm->category_groups_count && !found; ++c_idx){
                             category_group = category_group->next;
@@ -1884,10 +1888,10 @@ draw_entire_ui(void){
 
                                 String8 cat_part = str8_format(tm->frame_arena, "%s: ", category_group->name);
                                 String8 name_part = str8(category->name, char_length(category->name));
-                                String8 cat_category_name = str8_concatenate(tm->frame_arena, cat_part, name_part);
+                                String8 category_name = str8_concatenate(tm->frame_arena, cat_part, name_part);
 
-                                if(cat_category_name.count == merch->category.count){
-                                    if(str8_compare(merch->category, cat_category_name)){
+                                if(category_name.count == merch_category.count){
+                                    if(str8_compare(merch_category, category_name)){
                                         found = true;
                                     }
                                 }
@@ -1907,7 +1911,7 @@ draw_entire_ui(void){
                     //bool selected = false;
                     s32 color_idx = 0;
                     fmt = str8_fmt(scratch.arena, "##merchant_group_select%i", merch->id);
-                    if(ImGui::BeginCombo((char*)fmt.data, (char*)merch->category.str, ImGuiComboFlags_HeightLarge)){
+                    if(ImGui::BeginCombo((char*)fmt.data, (char*)merch_category.str, ImGuiComboFlags_HeightLarge)){
                         for(int n = 0; n < pm->category_list_count; n++){
                             String8 selection_item = pm->category_list[n];
 
@@ -1936,7 +1940,7 @@ draw_entire_ui(void){
                                 }
                             }
 
-                            const bool is_selected = str8_compare(selection_item, merch->category);
+                            const bool is_selected = str8_compare(selection_item, merch_category);
                             if(ImGui::Selectable((char*)selection_item.str, is_selected)){
                                 memcpy(merch->category.str, selection_item.str, selection_item.count);
                                 merch->category.count = selection_item.count;
@@ -2241,10 +2245,10 @@ draw_entire_ui(void){
                                 }
                             }
                         }
-                        tooltip(str8_literal("Lock/Unlock All Transactions."));
                         ImGui::PopStyleColor(2);
                         ImGui::PopID();
                         ImGui::PopFont();
+                        tooltip(str8_literal("Lock/Unlock All Transactions."));
                     }
                     {
                         ImGui::SameLine();
@@ -3051,9 +3055,6 @@ do_one_frame(void){
     }
 
     // IMPORTANT NOTE(rr): WE SERIALIZE ALL THE TIME
-    if(!os_path_exists(saves_path)){
-        os_dir_create(saves_path);
-    }
     serialize_config();
     serialize_budget();
     for(s32 y_idx=0; y_idx < MAX_YEAR_COUNT; ++y_idx){
@@ -3259,6 +3260,8 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         lock_button_width = size.x + (style.FramePadding.x * 2.0f);
         ImGui::PopFont();
         end_scratch(scratch);
+
+        test_merchants();
 
         memory.initialized = true;
     }
