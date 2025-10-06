@@ -1866,7 +1866,7 @@ draw_entire_ui(void){
                     ImGui::TableNextRow();
 
                     ImGui::TableNextColumn();
-                    ImGui::Text("%s", (char*)merch->description.str);
+                    ImGui::Text("%s", merch->description);
 
                     ImGui::TableNextColumn();
                     ImGui::PushItemWidth(category_group_select_column_width);
@@ -1942,9 +1942,9 @@ draw_entire_ui(void){
 
                             const bool is_selected = str8_compare(selection_item, merch_category);
                             if(ImGui::Selectable((char*)selection_item.str, is_selected)){
-                                memcpy(merch->category.str, selection_item.str, selection_item.count);
-                                merch->category.count = selection_item.count;
-                                merch->category.str[merch->category.count] = '\0';
+                                memcpy(merch->category, selection_item.str, selection_item.count);
+                                //merch->category.count = selection_item.count;
+                                //merch->category.str[merch->category.count] = '\0';
                                 apply_new_category = true;
                             }
 
@@ -2261,7 +2261,8 @@ draw_entire_ui(void){
 
                                 String8 trans_description = str8_cstring(trans->description);
                                 for(Merchant* m = pm->merchants; m != 0; m = m->next){
-                                    if(str8_compare(m->description, trans_description)){
+                                    String8 m_description = str8_cstring(m->description);
+                                    if(str8_compare(m_description, trans_description)){
                                         m->hidden = true;
                                         apply_hidden_transactions = true;
                                         break;
@@ -2527,10 +2528,11 @@ draw_entire_ui(void){
                                     String8 trans_description = str8_cstring(trans->description);
                                     String8 trans_category = str8_cstring(trans->category);
                                     for(Merchant* merch = pm->merchants; merch != 0; merch = merch->next){
-                                        if(str8_compare(merch->description, trans_description)){
-                                            memcpy(merch->category.str, trans_category.str, trans_category.count);
-                                            merch->category.count = trans_category.count;
-                                            merch->category.str[merch->category.count] = '\0';
+                                        String8 m_description = str8_cstring(merch->description);
+                                        if(str8_compare(m_description, trans_description)){
+                                            memcpy(merch->category, trans_category.str, trans_category.count);
+                                            //merch->category.count = trans_category.count;
+                                            //merch->category.str[merch->category.count] = '\0';
                                             break;
                                         }
                                     }
@@ -2585,7 +2587,8 @@ draw_entire_ui(void){
                     if(ImGui::Button((char*)fmt.str)){
                         String8 trans_description = str8_cstring(trans->description);
                         for(Merchant* m = pm->merchants; m != 0; m = m->next){
-                            if(str8_compare(m->description, trans_description)){
+                            String8 m_description = str8_cstring(m->description);
+                            if(str8_compare(m_description, trans_description)){
                                 m->hidden = true;
                                 apply_hidden_transactions = true;
                                 break;
@@ -2979,8 +2982,10 @@ do_one_frame(void){
                     String8 trans_description = str8_cstring(trans->description);
                     String8 trans_category = str8_cstring(trans->category);
                     for(Merchant* m = pm->merchants; m != 0; m = m->next){
-                        if(str8_compare(m->description, trans_description)){
-                            str8_copy_to_char(trans->category, m->category, m->category.count);
+                        String8 m_description = str8_cstring(m->description);
+                        if(str8_compare(m_description, trans_description)){
+                            memcpy(trans->category, m->category, MERCH_CATEGORY_SIZE);
+                            //str8_copy_to_char(trans->category, m->category, m->category.count);
                             trans->merchant_id = m->id;
                             break;
                         }
@@ -3001,7 +3006,8 @@ do_one_frame(void){
                     String8 trans_description = str8_cstring(trans->description);
                     // slow: Hashtable here would help.
                     for(Merchant* m = pm->merchants; m != 0; m = m->next){
-                        if(str8_compare(m->description, trans_description)){
+                        String8 m_description = str8_cstring(m->description);
+                        if(str8_compare(m_description, trans_description)){
                             trans->hidden = m->hidden;
                             if(!m->hidden){
                                 month->transaction_visible_count++;

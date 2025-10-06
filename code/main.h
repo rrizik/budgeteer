@@ -1796,14 +1796,14 @@ test_merchants(void){
 
     s32 count = 0;
     for(Merchant* first = pm->merchants; first != 0; first = first->next){
-        print("%s\n", first->description.str);
+        print("%s\n", first->description);
         for(Merchant* second = pm->merchants; second != 0; second = second->next){
             String8 a = str8_cstring(first->description);
             String8 b = str8_cstring(second->description);
             f32 result = best_fit(a, b);
             if(result > 50.0f){
                 Fit f = {
-                    .str = b.description,
+                    .str = b.str,
                     .amount = result,
                 };
                 fit[count++] = f;
