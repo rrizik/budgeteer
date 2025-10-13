@@ -149,7 +149,7 @@ typedef struct CategoryGroup{
 
 global u64 merchant_id = 0;
 #define MERCH_DESCRIPTION_SIZE 1024
-#define MERCH_CATEGORY_SIZE 1024
+#define MERCH_CATEGORY_SIZE 128
 typedef struct Merchant{
     Merchant* next;
     u64 id;
@@ -1251,6 +1251,9 @@ deserialize_config(void){
                     String8Node* str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node->next->str;
                     String8 value = str8_node->prev->str;
+                    if(str8_ends_with_byte(value, '\x1B')){
+                        str8_trim_right(&value, 1);
+                    }
 
                     if(str8_contains(key, str8_literal("csv_profile_idx"))){
                         pm->csv_profile_idx = atoi((char*)value.str);
@@ -1274,6 +1277,9 @@ deserialize_config(void){
                     String8Node* str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node->next->str;
                     String8 value = str8_node->prev->str;
+                    if(str8_ends_with_byte(value, '\x1B')){
+                        str8_trim_right(&value, 1);
+                    }
 
                     if(str8_compare(key, str8_literal("name"))){
                         str8_copy_to_char(profile->name, value, PROFILE_NAME_SIZE);
@@ -1308,6 +1314,9 @@ deserialize_config(void){
                     String8Node* str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node->next->str;
                     String8 value = str8_node->prev->str;
+                    if(str8_ends_with_byte(value, '\x1B')){
+                        str8_trim_right(&value, 1);
+                    }
 
                     if(str8_compare(key, str8_literal("quarter_tab_idx"))){
                         pm->quarter_tab_idx = atoi((char*)value.str);
@@ -1329,6 +1338,9 @@ deserialize_config(void){
                     String8Node* str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node->next->str;
                     String8 value = str8_node->prev->str;
+                    if(str8_ends_with_byte(value, '\x1B')){
+                        str8_trim_right(&value, 1);
+                    }
 
                     if(str8_compare(key, str8_literal("draw_month_plan"))){
                         pm->draw_month_plan = atoi((char*)value.str);
@@ -1356,6 +1368,9 @@ deserialize_config(void){
                     String8Node* str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node->next->str;
                     String8 value = str8_node->prev->str;
+                    if(str8_ends_with_byte(value, '\x1B')){
+                        str8_trim_right(&value, 1);
+                    }
 
                     if(str8_compare(key, str8_literal("width"))){
                         window_width = atoi((char*)value.str);
@@ -1386,6 +1401,9 @@ deserialize_config(void){
                     String8Node* str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node->next->str;
                     String8 value = str8_node->prev->str;
+                    if(str8_ends_with_byte(value, '\x1B')){
+                        str8_trim_right(&value, 1);
+                    }
 
                     if(str8_compare(key, str8_literal("left"))){
                         window_restored_rect.left = atoi((char*)value.str);
@@ -1413,6 +1431,9 @@ deserialize_config(void){
                     String8Node* str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node->next->str;
                     String8 value = str8_node->prev->str;
+                    if(str8_ends_with_byte(value, '\x1B')){
+                        str8_trim_right(&value, 1);
+                    }
 
                     if(str8_compare(key, str8_literal("tooltips"))){
                         show_tooltips = atoi((char*)value.str);
@@ -1431,6 +1452,9 @@ deserialize_config(void){
                     String8Node* str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node->next->str;
                     String8 value = str8_node->prev->str;
+                    if(str8_ends_with_byte(value, '\x1B')){
+                        str8_trim_right(&value, 1);
+                    }
 
                     if(str8_compare(key, str8_literal("year_idx"))){
                         pm->year_idx = atoi((char*)value.str);
@@ -1461,6 +1485,9 @@ deserialize_config(void){
                     String8Node* str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node->next->str;
                     String8 value = str8_node->prev->str;
+                    if(str8_ends_with_byte(value, '\x1B')){
+                        str8_trim_right(&value, 1);
+                    }
 
                     if(str8_compare(key, str8_literal("description"))){
                         str8_copy_to_char(merch->description, value, value.count);
@@ -1601,7 +1628,7 @@ deserialize_year(Year* year){
 
         if(str8_starts_with(line, str8_literal("#"))){
             if(tps == TransactionParsingState_Transaction){
-                year->transaction_count += month->transaction_count;
+                //year->transaction_count += month->transaction_count;
                 // todo(rr): maybe serialize transactions_count and check to see if it matches here?
             }
             if(month_idx == 11){
@@ -1625,6 +1652,9 @@ deserialize_year(Year* year){
                     String8Node* str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node->next->str;
                     String8 value = str8_node->prev->str;
+                    if(str8_ends_with_byte(value, '\x1B')){
+                        str8_trim_right(&value, 1);
+                    }
 
                     if(str8_compare(key, str8_literal("muted"))){
                         month->muted = atoi((char*)value.str);
@@ -1645,7 +1675,8 @@ deserialize_year(Year* year){
             if(line.size){
                 trans = (Transaction*)pool_next(pm->transaction_pool);
                 dll_push_back(month->transactions, trans);
-                ++month->transaction_count;
+                month->transaction_count++;
+                year->transaction_count++;
             }
 
             String8 description_str = {0};
@@ -1862,6 +1893,9 @@ deserialize_budget(void){
                 String8Node* str8_node = str8_split(scratch.arena, word, '=');
                 String8 key = str8_node->next->str;
                 String8 value = str8_node->prev->str;
+                if(str8_ends_with_byte(value, '\x1B')){
+                    str8_trim_right(&value, 1);
+                }
 
                 if(str8_compare(key, str8_literal("budget"))){
                     str8_copy_to_char(pm->budget, value, TRANS_DESCRIPTION_SIZE);
@@ -1882,9 +1916,13 @@ deserialize_budget(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
+
                     String8Node* str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node->next->str;
                     String8 value = str8_node->prev->str;
+                    if(str8_ends_with_byte(value, '\x1B')){
+                        str8_trim_right(&value, 1);
+                    }
 
                     if(str8_compare(key, str8_literal("name"))){
                         str8_copy_to_char(category_group->name, value, TRANS_DESCRIPTION_SIZE);
@@ -1917,6 +1955,9 @@ deserialize_budget(void){
                     String8Node* str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node->next->str;
                     String8 value = str8_node->prev->str;
+                    if(str8_ends_with_byte(value, '\x1B')){
+                        str8_trim_right(&value, 1);
+                    }
 
                     if(str8_compare(key, str8_literal("name"))){
                         str8_copy_to_char(category->name, value, TRANS_DESCRIPTION_SIZE);

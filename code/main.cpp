@@ -542,10 +542,48 @@ draw_entire_ui(void){
                 ImGui::Text("           %i/%i (%.2f%%)", tm->options_arena->at, tm->options_arena->size, 100*((f32)tm->options_arena->at/(f32)tm->options_arena->size));
 
             }
+            if(ImGui::Button("Generate Merchant List")){
+                for(s32 year_idx=0; year_idx < MAX_YEAR_COUNT; ++year_idx){
+                    Year* year = pm->years + year_idx;
+                    for(s32 month_idx=0; month_idx < Month_Count; ++month_idx){
+                        MonthInfo* month = year->months + month_idx;
+                        month->transaction_visible_count = 0;
+                        for(Transaction* trans = month->transactions->next; trans != month->transactions; trans = trans->next){
+                            String8 trans_description_str = str8_cstring(trans->description);
+                            String8 trans_category_str = str8_cstring(trans->category);
+
+                            bool found = false;
+                            for(Merchant* merch = pm->merchants; merch != 0; merch = merch->next){
+                                String8 merch_description = str8_cstring(merch->description);
+                                if(str8_compare(merch_description, trans_description_str)){
+                                    trans->merchant_id = merch->id;
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if(!found){
+                                Merchant* merch = push_struct(&pm->arena, Merchant);
+                                sll_push_front(pm->merchants, merch);
+
+                                if(trans_category_str.count){
+                                    str8_copy_to_char(merch->category, trans_category_str, MERCH_CATEGORY_SIZE);
+                                }
+                                str8_copy_to_char(merch->description, trans_description_str, MERCH_DESCRIPTION_SIZE);
+                                str8_copy_to_char(merch->category, empty_category, empty_category.count);
+                                merch->id = merchant_id++;
+
+                                trans->merchant_id = merch->id;
+                            }
+                        }
+                    }
+                }
+            }
+
 
             ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
             ImGui::End();
         }
+        // END DEBUG WINDOW
 #endif
 
         ScratchArena scratch = begin_scratch();
