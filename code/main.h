@@ -835,6 +835,482 @@ global bool debug_show_tm_memory = false;
 
 global s32 lock_button_width = 0.0f;
 
+//global String8 domain_names[] = {
+//    .COM
+//        .NET
+//        .ORG
+//        .CO
+//        .BILL
+//        .BIZ
+//        .IO
+//
+//}
+
+global String8 white_list[] = {
+    str8_lit("F45"),
+};
+
+global String8 processor_prefix[] = {
+   str8_lit("SQ"),
+   str8_lit("SQ*"),
+   str8_lit("VC*"),
+   str8_lit("PY*"),
+   str8_lit("TST*"),
+   str8_lit("WL*"),
+   str8_lit("WP*"),
+   str8_lit("WT*"),
+   str8_lit("AA*"),
+   str8_lit("VC"),
+};
+
+global String8 noise_tokens[] = {
+    str8_lit("ROUND"),
+    str8_lit("UP"),
+    str8_lit("TRANSFER"),
+    str8_lit("DIR"),
+    str8_lit("DEP"),
+    str8_lit("WEB"),
+    str8_lit("PMTS"),
+    str8_lit("FUNDS"),
+    str8_lit("TRAN"),
+    str8_lit("WITHDRAWAL"),
+    str8_lit("DIVIDEND"),
+    str8_lit("FEE"),
+    str8_lit("SERVICE"),
+    str8_lit("TO"),
+    str8_lit("CTR"),
+    str8_lit("<###>"),
+
+    str8_lit("PAYMENT"),
+    str8_lit("ACCTVERIFY"),
+    str8_lit("INT"),
+    str8_lit("TST"),
+    str8_lit("NNT"),
+    str8_lit("NTTA"),
+    str8_lit("HCTRA"),
+    str8_lit("ATGPAY"),
+
+    str8_lit("LLC"),
+    str8_lit("INC"),
+    str8_lit("CO"),
+    str8_lit("COMPANY"),
+    str8_lit("SERVICES"),
+    str8_lit("SERVICE"),
+    str8_lit("STORE"),
+    str8_lit("OFFIC"),
+    str8_lit("ONLINE"),
+
+    str8_lit("ST"),
+    str8_lit("RD"),
+    str8_lit("DR"),
+    str8_lit("HWY"),
+    str8_lit("AVE"),
+    str8_lit("AVENUE"),
+    str8_lit("PKWY"),
+    str8_lit("PLAZA"),
+    str8_lit("SUITE"),
+    str8_lit("STE"),
+    str8_lit("UNIT"),
+    str8_lit("FLOOR"),
+    str8_lit("N"),
+    str8_lit("S"),
+    str8_lit("E"),
+    str8_lit("W"),
+
+    str8_lit("STATE"),
+    str8_lit("HIGHWAY"),
+    str8_lit("LOS"),
+    str8_lit("BLVD"),
+    str8_lit("BUDA"),
+    str8_lit("AUSTIN"),
+    str8_lit("PLANO"),
+    str8_lit("RIOS"),
+    str8_lit("STPLANO"),
+    str8_lit("PARK"),
+    str8_lit("DALLAS"),
+    str8_lit("MCKINNEY"),
+    str8_lit("RICHARDSON"),
+    str8_lit("MURPHY"),
+    str8_lit("ALLEN"),
+    str8_lit("FRISCO"),
+    str8_lit("TEMPLE"),
+    str8_lit("WYLIE"),
+    str8_lit("CARROLLTON"),
+    str8_lit("BELLEVUE"),
+    str8_lit("SEATTLE"),
+    str8_lit("HOLLYWOOD"),
+    str8_lit("MIAMI"),
+    str8_lit("BOSTON"),
+    str8_lit("HOUSTON"),
+    str8_lit("BOZEMAN"),
+    str8_lit("CHICAGO"),
+    str8_lit("NASHVILLE"),
+    str8_lit("PHOENIX"),
+};
+
+global String8 country_states[] = {
+    str8_lit("ABCAN"),
+    str8_lit("AUS"),
+    str8_lit("AZUS"),
+    str8_lit("BCCAN"),
+    str8_lit("CAUS"),
+    str8_lit("COUS"),
+    str8_lit("CYCY"),
+    str8_lit("DEU"),
+    str8_lit("DEUS"),
+    str8_lit("FLUS"),
+    str8_lit("FRA"),
+    str8_lit("GAUS"),
+    str8_lit("GBR"),
+    str8_lit("HKHK"),
+    str8_lit("ILUS"),
+    str8_lit("MAUS"),
+    str8_lit("MTUS"),
+    str8_lit("MXMX"),
+    str8_lit("NCUS"),
+    str8_lit("NHUS"),
+    str8_lit("NMUS"),
+    str8_lit("NJUS"),
+    str8_lit("NSCAN"),
+    str8_lit("NYUS"),
+    str8_lit("NZL"),
+    str8_lit("OKUS"),
+    str8_lit("OHUS"),
+    str8_lit("ONCAN"),
+    str8_lit("PAUS"),
+    str8_lit("TNUS"),
+    str8_lit("TXUS"),
+    str8_lit("TXUSA"),
+    str8_lit("UTUS"),
+    str8_lit("USA"),
+    str8_lit("WAUS"),
+};
+
+static bool is_white_list(String8 string){
+    bool result = false;
+    s32 count = array_count(white_list);
+    for(s32 idx = 0; idx < count; ++idx){
+        if(str8_compare(string, white_list[idx])){
+            result = true;
+            break;
+        }
+    }
+    return(result);
+}
+
+static void
+generate_merchants(){
+    ScratchArena scratch = begin_scratch(0);
+    Arena* arena = pm->data_arena;
+
+    for(s32 year_idx=0; year_idx < MAX_YEAR_COUNT; ++year_idx){
+        Year* year = pm->years + year_idx;
+        for(s32 month_idx=0; month_idx < Month_Count; ++month_idx){
+            MonthInfo* month = year->months + month_idx;
+            for(Transaction* trans = month->transactions->next; trans != month->transactions; trans = trans->next){
+
+                String8 string = {0};
+                string.str = push_array(scratch.arena, u8, TRANS_DESCRIPTION_SIZE);
+                u64 length = char_length(trans->description);
+
+                memcpy(string.str, trans->description, length);
+                string.count = length;
+
+                str8_to_upper(&string);
+
+                // Filter out disallowed characters.
+                for(s32 i=0; i < string.count; ++i){
+                    char byte = string.str[i];
+                    if(!byte_is_alnum(byte) &&
+                       !byte_is_space(byte) &&
+                        byte != '/' &&
+                        byte != '.' &&
+                        byte != '-' &&
+                        byte != '\''){
+
+                        //print("%c\n", (char)byte);
+                        string.str[i] = ' ';
+                    }
+                }
+
+                // Trim all white space from start and end.
+                while(str8_ends_with_byte(string, ' ')){
+                    str8_trim_right(&string, 1);
+                }
+                while(str8_starts_with_byte(string, ' ')){
+                    str8_trim_left(&string, 1);
+                }
+
+                // Trim multiple spaces down to 1.
+                s32 space_count = 0;
+                s32 write_idx = 0;
+                for(s32 read_idx=0; read_idx < string.count; ++read_idx){
+                    u8 byte = string.str[read_idx];
+
+                    if(byte_is_space(byte)){
+                        space_count++;
+                    }
+                    else{
+                        space_count = 0;
+                    }
+
+                    if(space_count <= 1){
+                        string.str[write_idx++] = byte;
+                    }
+                }
+                string.count = write_idx;
+
+                // alternative to the above code
+                //String8List parts = str8_split(scratch.arena, trans_description, ' ', 0);
+                //String8Join join = {0};
+                //join.mid = str8_lit(" ");
+                //String8 result = str8_join(scratch.arena, parts, join);
+
+                // replace numbers with <###>
+                char tmp[1024] = {0};
+                s32 digit_count = 0;
+                write_idx = 0;
+                for(s32 read_idx = 0; read_idx < string.count; ++read_idx){
+                    u8 byte = string.str[read_idx];
+
+                    if(byte_is_digit(byte)){
+                        digit_count++;
+                    }
+                    else{
+                        if(digit_count >= 3){
+                            tmp[write_idx++] = '<';
+                            tmp[write_idx++] = '#';
+                            tmp[write_idx++] = '#';
+                            tmp[write_idx++] = '#';
+                            tmp[write_idx++] = '>';
+                            tmp[write_idx++] = (char)byte;
+                        }
+                        else if(digit_count != 0){
+                            while(digit_count != 0){
+                                tmp[write_idx++] = (char)string.str[read_idx - digit_count];
+                                digit_count--;
+                            }
+                            tmp[write_idx++] = (char)byte;
+                        }
+                        else{
+                            tmp[write_idx++] = (char)byte;
+                        }
+                        digit_count = 0;
+                    }
+                }
+                if(digit_count >= 3){
+                    tmp[write_idx++] = '<';
+                    tmp[write_idx++] = 'N';
+                    tmp[write_idx++] = 'U';
+                    tmp[write_idx++] = 'M';
+                    tmp[write_idx++] = '>';
+                }
+                string = str8(tmp, write_idx);
+
+                // tokenize the string
+                String8List parts = str8_split(scratch.arena, string, ' ', 0);
+
+                // truncate on country state code
+                s32 count = array_count(country_states);
+                for(String8Node* node = parts.first; node != 0; ){
+                    String8Node* next = node->next;
+
+                    for(s32 idx = 0; idx < count; idx++){
+                        String8 country_state = country_states[idx];
+                        if(str8_compare(node->string, country_state)){
+                            dll_remove(&parts, node);
+                            break;
+                        }
+                    }
+
+                    node = next;
+                }
+
+                // remove noise
+                count = array_count(noise_tokens);
+                for(String8Node* node = parts.first; node != 0; ){
+                    String8Node* next = node->next;
+
+                    for(s32 idx = 0; idx < count; idx++){
+                        String8 token = noise_tokens[idx];
+                        if(str8_compare(node->string, token)){
+                            dll_remove(&parts, node);
+                            break;
+                        }
+                    }
+
+                    node = next;
+                }
+
+                // trim domains
+                for(String8Node* node = parts.first; node != 0; node = node->next){
+                    String8 test1 = str8_lit("WWW.");
+                    if(str8_starts_with(node->string, test1)){
+                        String8Node* remove_node = node;
+                        node = node->prev;
+                        dll_remove(&parts, remove_node);
+                    }
+
+                    String8 test2 = str8_lit(".COM");
+                    if(str8_contains(node->string, test2)){
+                        s32 idx = (s32)str8_index_from_left(node->string, test2);
+                        str8_trim_right(&node->string, node->string.count - idx);
+                    }
+                }
+
+
+                for(String8Node* node = parts.first; node != 0; node = node->next){
+                    if(is_white_list(node->string)){
+                        continue;
+                    }
+
+                    s32 digit_count = 0;
+                    if(node->string.count == 2){
+                        if(byte_is_alpha(node->string.str[0]) &&
+                           byte_is_digit(node->string.str[node->string.count - 1])){
+                            digit_count = 1;
+                        }
+                    }
+                    else if(node->string.count > 2){
+                        if(byte_is_alpha(node->string.str[0]) &&
+                           byte_is_digit(node->string.str[node->string.count - 1]) &&
+                           byte_is_digit(node->string.str[node->string.count - 2])){
+                            digit_count = 2;
+                        }
+                    }
+
+                    if(digit_count != 0){
+                       str8_trim_right(&node->string, digit_count);
+                    }
+                }
+
+                // Remove digis only or <###>.
+                for(String8Node* node = parts.first; node != 0; ){
+                    String8Node* next = node->next;
+
+                    if(str8_is_digit(node->string)){
+                        dll_remove(&parts, node);
+                    }
+                    else if(str8_compare(node->string, str8_lit("<###>")) ||
+                            str8_compare(node->string, str8_lit(""))){
+                        dll_remove(&parts, node);
+                    }
+
+                    node = next;
+                }
+
+                // Remove < 2 count.
+                for(String8Node* node = parts.first; node != 0; ){
+                    if(is_white_list(node->string)){
+                        continue;
+                    }
+
+                    String8Node* next = node->next;
+
+                    if(node->string.count == 1){
+                        dll_remove(&parts, node);
+                    }
+
+                    node = next;
+                }
+
+                // Remove preprocessor prefix from first node only.
+                count = array_count(processor_prefix);
+                for(s32 idx=0; idx < count; ++idx){
+                    if(str8_compare(parts.first->string, processor_prefix[idx])){
+                        dll_pop_front(&parts);
+                    }
+                }
+
+                for(String8Node* node = parts.first; node != 0; ){
+                    String8Node* next = node;
+                    if( str8_contains(node->string, str8_lit("<###>")) &&
+                       !str8_contains_alpha(node->string)){
+                        dll_remove(&parts, node);
+                    }
+                    node = next;
+                }
+
+                //// trim <###>
+                //for(String8Node* node = parts.first; node != 0; node = node->next){
+                //    String8 test = str8_lit("<###>");
+                //    if(str8_ends_with(node->string, test)){
+                //        str8_trim_right(&node->string, 5);
+                //    }
+
+                //    if(str8_starts_with(node->string, test)){
+                //        str8_trim_left(&node->string, 5);
+                //    }
+
+                //    if(node->string.count <= 2){
+                //        String8Node* remove_node = node;
+                //        node = node->prev;
+                //        dll_remove(&parts, remove_node);
+                //    }
+                //}
+
+                String8Join join = {0};
+                join.mid = str8_lit(" ");
+                string = str8_join(scratch.arena, &parts, &join);
+                if(string.count == 0){
+                    string = str8_lit("UNKNOWN");
+                }
+                arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "%.*s\n", (int)string.count, string.str);
+
+
+
+
+
+
+
+
+
+
+
+
+                //String8Join join = {0};
+                //join.mid = str8_lit(" ");
+                //string = str8_join(scratch.arena, parts, join);
+
+                //s32 a = 1;
+
+                //bool found = false;
+                //for(Merchant* m = pm->merchants; m != 0; m = m->next){
+                //    String8 m_description = str8_cstring(m->description);
+                //    if(str8_compare(m_description, trans_description)){
+                //        trans->hidden = m->hidden;
+                //        if(!m->hidden){
+                //            month->transaction_visible_count++;
+                //        }
+                //        break;
+                //    }
+                //}
+                //if(!found){
+                //    Merchant* merch = push_struct(&pm->arena, Merchant);
+                //    sll_push_front(pm->merchants, merch);
+
+                //    str8_copy_to_char(merch->description, description_str, MERCH_DESCRIPTION_SIZE);
+                //    str8_copy_to_char(merch->category, empty_category, empty_category.count);
+                //    merch->id = merchant_id++;
+
+                //    trans->merchant_id = merch->id;
+                //}
+            }
+        }
+    }
+
+    String8 full_path = str8_path_append(scratch.arena, saves_path, str8_literal("test.b"));
+    File file = os_file_open(full_path, GENERIC_WRITE, CREATE_ALWAYS);
+    if(file.handle != INVALID_HANDLE_VALUE){
+        os_file_write(file, arena->base, arena->at);
+    }
+    os_file_close(file);
+
+    end_scratch(scratch);
+    arena_free(pm->data_arena);
+
+}
+
 static void
 parse_day_month_year(Transaction* trans){
     ScratchArena scratch = begin_scratch();
@@ -842,27 +1318,27 @@ parse_day_month_year(Transaction* trans){
     CSV_Profile* profile = pm->csv_profile;
     char delimiter = date_delimiters[profile->date_format_kind];
     String8 transaction_date = str8_cstring(trans->date);
-    String8Node* date_parts = str8_split(scratch.arena, transaction_date, delimiter);
+    String8List date_parts = str8_split(scratch.arena, transaction_date, delimiter, 0);
 
     //String8 dd, mm, yyyy;
     switch(profile->date_format_kind){
         case Format_Kind_MMDDYYYY_Dash:
         case Format_Kind_MMDDYYYY_Forward_Slash:{
-            str8_copy(&pm->mm,   &date_parts->next->str);
-            str8_copy(&pm->dd,   &date_parts->next->next->str);
-            str8_copy(&pm->yyyy, &date_parts->next->next->next->str);
+            str8_copy(&pm->mm,   &date_parts.first->string);
+            str8_copy(&pm->dd,   &date_parts.first->next->string);
+            str8_copy(&pm->yyyy, &date_parts.first->next->next->string);
         } break;
         case Format_Kind_DDMMYYYY_Dash:
         case Format_Kind_DDMMYYYY_Forward_Slash:{
-            str8_copy(&pm->dd,   &date_parts->next->str);
-            str8_copy(&pm->mm,   &date_parts->next->next->str);
-            str8_copy(&pm->yyyy, &date_parts->next->next->next->str);
+            str8_copy(&pm->dd,   &date_parts.first->string);
+            str8_copy(&pm->mm,   &date_parts.first->next->string);
+            str8_copy(&pm->yyyy, &date_parts.first->next->next->string);
         } break;
         case Format_Kind_YYYYMMDD_Dash:
         case Format_Kind_YYYYMMDD_Forward_Slash:{
-            str8_copy(&pm->yyyy, &date_parts->next->str);
-            str8_copy(&pm->mm,   &date_parts->next->next->str);
-            str8_copy(&pm->dd,   &date_parts->next->next->next->str);
+            str8_copy(&pm->yyyy, &date_parts.first->string);
+            str8_copy(&pm->mm,   &date_parts.first->next->string);
+            str8_copy(&pm->dd,   &date_parts.first->next->next->string);
         } break;
     }
 
@@ -901,27 +1377,27 @@ test_date_against_format(String8 date){
     }
 
     ScratchArena scratch = begin_scratch();
-    String8Node* date_parts = str8_split(scratch.arena, date, delimiter);
+    String8List date_parts = str8_split(scratch.arena, date, delimiter, 0);
 
     String8 dd, mm, yyyy;
     switch(profile->date_format_kind){
         case Format_Kind_MMDDYYYY_Dash:
         case Format_Kind_MMDDYYYY_Forward_Slash:{
-            mm   = date_parts->next->str;
-            dd   = date_parts->next->next->str;
-            yyyy = date_parts->next->next->next->str;
+            mm   = date_parts.first->string;
+            dd   = date_parts.first->next->string;
+            yyyy = date_parts.first->next->next->string;
         } break;
         case Format_Kind_DDMMYYYY_Dash:
         case Format_Kind_DDMMYYYY_Forward_Slash:{
-            dd   = date_parts->next->str;
-            mm   = date_parts->next->next->str;
-            yyyy = date_parts->next->next->next->str;
+            dd   = date_parts.first->string;
+            mm   = date_parts.first->next->string;
+            yyyy = date_parts.first->next->next->string;
         } break;
         case Format_Kind_YYYYMMDD_Dash:
         case Format_Kind_YYYYMMDD_Forward_Slash:{
-            yyyy = date_parts->next->str;
-            mm   = date_parts->next->next->str;
-            dd   = date_parts->next->next->next->str;
+            yyyy = date_parts.first->string;
+            mm   = date_parts.first->next->string;
+            dd   = date_parts.first->next->next->string;
         } break;
     }
 
@@ -1118,6 +1594,7 @@ deserialize_csv(String8 full_path){
                     str8_strip_quotes(&view);
                     str8_copy_to_char(trans->description, view, TRANS_DESCRIPTION_SIZE);
                     description_str = str8(view.str, view.count);
+                    str8_to_upper(&description_str);
                 }
 
                 ++count;
@@ -1171,7 +1648,7 @@ deserialize_csv(String8 full_path){
 
             // we still want to add the transaction even if the date wasnt found, just for the year selected
             if(year){
-                dll_push_back(month->transactions, trans);
+                dll_push_back_old(month->transactions, trans);
                 ++month->transaction_count;
                 ++year->transaction_count;
             }
@@ -1248,9 +1725,9 @@ deserialize_config(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8Node* str8_node = str8_split(scratch.arena, word, '=');
-                    String8 key = str8_node->next->str;
-                    String8 value = str8_node->prev->str;
+                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8 key = str8_node.first->string;
+                    String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
                         str8_trim_right(&value, 1);
                     }
@@ -1264,7 +1741,7 @@ deserialize_config(void){
         else if(cps == ConfigParsingState_CSV_Profile){
 
             CSV_Profile* profile = (CSV_Profile*)pool_next(pm->csv_profile_pool);
-            dll_push_back(pm->csv_profiles, profile);
+            dll_push_back_old(pm->csv_profiles, profile);
             pm->csv_profile_count++;
 
             while(line.size){
@@ -1274,9 +1751,9 @@ deserialize_config(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8Node* str8_node = str8_split(scratch.arena, word, '=');
-                    String8 key = str8_node->next->str;
-                    String8 value = str8_node->prev->str;
+                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8 key = str8_node.first->string;
+                    String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
                         str8_trim_right(&value, 1);
                     }
@@ -1311,9 +1788,9 @@ deserialize_config(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8Node* str8_node = str8_split(scratch.arena, word, '=');
-                    String8 key = str8_node->next->str;
-                    String8 value = str8_node->prev->str;
+                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8 key = str8_node.first->string;
+                    String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
                         str8_trim_right(&value, 1);
                     }
@@ -1335,9 +1812,9 @@ deserialize_config(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8Node* str8_node = str8_split(scratch.arena, word, '=');
-                    String8 key = str8_node->next->str;
-                    String8 value = str8_node->prev->str;
+                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8 key = str8_node.first->string;
+                    String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
                         str8_trim_right(&value, 1);
                     }
@@ -1365,9 +1842,9 @@ deserialize_config(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8Node* str8_node = str8_split(scratch.arena, word, '=');
-                    String8 key = str8_node->next->str;
-                    String8 value = str8_node->prev->str;
+                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8 key = str8_node.first->string;
+                    String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
                         str8_trim_right(&value, 1);
                     }
@@ -1398,9 +1875,9 @@ deserialize_config(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8Node* str8_node = str8_split(scratch.arena, word, '=');
-                    String8 key = str8_node->next->str;
-                    String8 value = str8_node->prev->str;
+                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8 key = str8_node.first->string;
+                    String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
                         str8_trim_right(&value, 1);
                     }
@@ -1428,9 +1905,9 @@ deserialize_config(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8Node* str8_node = str8_split(scratch.arena, word, '=');
-                    String8 key = str8_node->next->str;
-                    String8 value = str8_node->prev->str;
+                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8 key = str8_node.first->string;
+                    String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
                         str8_trim_right(&value, 1);
                     }
@@ -1449,9 +1926,9 @@ deserialize_config(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8Node* str8_node = str8_split(scratch.arena, word, '=');
-                    String8 key = str8_node->next->str;
-                    String8 value = str8_node->prev->str;
+                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8 key = str8_node.first->string;
+                    String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
                         str8_trim_right(&value, 1);
                     }
@@ -1482,14 +1959,15 @@ deserialize_config(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8Node* str8_node = str8_split(scratch.arena, word, '=');
-                    String8 key = str8_node->next->str;
-                    String8 value = str8_node->prev->str;
+                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8 key = str8_node.first->string;
+                    String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
                         str8_trim_right(&value, 1);
                     }
 
                     if(str8_compare(key, str8_literal("description"))){
+                        str8_to_upper(&value); // todo: temporary until merchant stuff is done
                         str8_copy_to_char(merch->description, value, value.count);
                         //memcpy(merch->description.str, value.str, value.count);
                         //merch->description.count = value.count - 1;
@@ -1649,9 +2127,9 @@ deserialize_year(Year* year){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8Node* str8_node = str8_split(scratch.arena, word, '=');
-                    String8 key = str8_node->next->str;
-                    String8 value = str8_node->prev->str;
+                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8 key = str8_node.first->string;
+                    String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
                         str8_trim_right(&value, 1);
                     }
@@ -1674,7 +2152,7 @@ deserialize_year(Year* year){
             Transaction* trans;
             if(line.size){
                 trans = (Transaction*)pool_next(pm->transaction_pool);
-                dll_push_back(month->transactions, trans);
+                dll_push_back_old(month->transactions, trans);
                 month->transaction_count++;
                 year->transaction_count++;
             }
@@ -1688,9 +2166,9 @@ deserialize_year(Year* year){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8Node* str8_node = str8_split(scratch.arena, word, '=');
-                    String8 key = str8_node->next->str;
-                    String8 value = str8_node->prev->str;
+                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8 key = str8_node.first->string;
+                    String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
                         str8_trim_right(&value, 1);
                     }
@@ -1704,6 +2182,7 @@ deserialize_year(Year* year){
                     else if(str8_compare(key, str8_literal("description"))){
                         str8_copy_to_char(trans->description, value, value.count);
                         description_str = str8(value.str, value.count);
+                        str8_to_upper(&description_str);
                     }
                     else if(str8_compare(key, str8_literal("category"))){
                         str8_copy_to_char(trans->category, value, value.count);
@@ -1890,9 +2369,9 @@ deserialize_budget(void){
                     u32 count = str8_extend_word_to_byte(&word, '\x1B');
                     str8_advance(&line, count);
                 }
-                String8Node* str8_node = str8_split(scratch.arena, word, '=');
-                String8 key = str8_node->next->str;
-                String8 value = str8_node->prev->str;
+                String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                String8 key = str8_node.first->string;
+                String8 value = str8_node.last->string;
                 if(str8_ends_with_byte(value, '\x1B')){
                     str8_trim_right(&value, 1);
                 }
@@ -1904,7 +2383,7 @@ deserialize_budget(void){
         }
         else if(bps == BudgetParsingState_CategoryGroup){
             CategoryGroup* category_group = (CategoryGroup*)pool_next(pm->category_group_pool);
-            dll_push_back(pm->month_category_groups, category_group);
+            dll_push_back_old(pm->month_category_groups, category_group);
             category_group->categories = (Category*)pool_next(pm->category_pool);
             dll_clear(category_group->categories);
             ++pm->category_groups_count;
@@ -1917,9 +2396,9 @@ deserialize_budget(void){
                         str8_advance(&line, count);
                     }
 
-                    String8Node* str8_node = str8_split(scratch.arena, word, '=');
-                    String8 key = str8_node->next->str;
-                    String8 value = str8_node->prev->str;
+                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8 key = str8_node.first->string;
+                    String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
                         str8_trim_right(&value, 1);
                     }
@@ -1942,7 +2421,7 @@ deserialize_budget(void){
             ++category_group->category_count;
 
             Category* category = (Category*)pool_next(pm->category_pool);
-            dll_push_back(category_group->categories, category);
+            dll_push_back_old(category_group->categories, category);
             ++pm->total_categories_count;
 
             while(line.size){
@@ -1952,9 +2431,9 @@ deserialize_budget(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8Node* str8_node = str8_split(scratch.arena, word, '=');
-                    String8 key = str8_node->next->str;
-                    String8 value = str8_node->prev->str;
+                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8 key = str8_node.first->string;
+                    String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
                         str8_trim_right(&value, 1);
                     }

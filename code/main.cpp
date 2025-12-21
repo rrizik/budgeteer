@@ -901,7 +901,7 @@ draw_entire_ui(void){
             if(ImGui::Button("+##add_category_group_button")){
                 if(pm->category_groups_count < MAX_CATEGORY_GROUP_COUNT){
                     CategoryGroup* category_group = (CategoryGroup*)pool_next(pm->category_group_pool);
-                    dll_push_back(pm->month_category_groups, category_group);
+                    dll_push_back_old(pm->month_category_groups, category_group);
 
                     category_group->categories = (Category*)pool_next(pm->category_pool);
                     dll_clear(category_group->categories);
@@ -1007,7 +1007,7 @@ draw_entire_ui(void){
                 if(ImGui::Button("+##add_category_button")){
                     if(pm->total_categories_count < MAX_CATEGORY_COUNT){
                         Category* c = (Category*)pool_next(pm->category_pool);
-                        dll_push_back(category_group->categories, c);
+                        dll_push_back_old(category_group->categories, c);
 
                         category_group->draw_categories = true;
                         category_group->category_count++;
@@ -1027,7 +1027,7 @@ draw_entire_ui(void){
                     pm->total_categories_count -= category_group->category_count;
                     --pm->category_groups_count;
 
-                    dll_remove(category_group);
+                    dll_remove_old(category_group);
                     pool_free(pm->category_group_pool, category_group);
                 }
                 tooltip(str8_literal("Delete All Sub-Categories."));
@@ -1152,7 +1152,7 @@ draw_entire_ui(void){
                             --pm->total_categories_count;
                             --category_group->category_count;
 
-                            dll_remove(category);
+                            dll_remove_old(category);
                             pool_free(pm->category_pool, category);
                         }
                         tooltip(str8_literal("Delete Category."));
@@ -1219,7 +1219,7 @@ draw_entire_ui(void){
             ImGui::SetCursorPosX(plus_column_start);
             if(ImGui::Button("+##add_quarter_category_group_button")){
                 //CategoryGroup* category_group = (CategoryGroup*)pool_next(pm->category_group_pool);
-                //dll_push_back(pm->quarter_category_groups, category_group);
+                //dll_push_back_old(pm->quarter_category_groups, category_group);
                 //category_group->categories = (Category*)pool_next(pm->category_pool);
                 //dll_clear(category_group->categories);
 
@@ -1268,7 +1268,7 @@ draw_entire_ui(void){
             ImGui::SetCursorPosX(plus_column_start);
             if(ImGui::Button("+##add_biannual_category_group_button")){
                 //CategoryGroup* category_group = (CategoryGroup*)pool_next(pm->category_group_pool);
-                //dll_push_back(pm->biannual_category_groups, category_group);
+                //dll_push_back_old(pm->biannual_category_groups, category_group);
                 //category_group->categories = (Category*)pool_next(pm->category_pool);
                 //dll_clear(category_group->categories);
 
@@ -1317,7 +1317,7 @@ draw_entire_ui(void){
             ImGui::SetCursorPosX(plus_column_start);
             if(ImGui::Button("+##add_annual_category_group_button")){
                 //CategoryGroup* category_group = (CategoryGroup*)pool_next(pm->category_group_pool);
-                //dll_push_back(pm->annual_category_groups, category_group);
+                //dll_push_back_old(pm->annual_category_groups, category_group);
                 //category_group->categories = (Category*)pool_next(pm->category_pool);
                 //dll_clear(category_group->categories);
 
@@ -1411,7 +1411,7 @@ draw_entire_ui(void){
             //    ImGui::PushID(c_idx);
             //    if(ImGui::Button("+##add_category_button")){
             //        Category* c = (Category*)pool_next(pm->category_pool);
-            //        dll_push_back(category_group->categories, c);
+            //        dll_push_back_old(category_group->categories, c);
 
             //        category_group->draw_categories = true;
             //        category_group->category_count++;
@@ -1426,7 +1426,7 @@ draw_entire_ui(void){
             //        //pm->total_categories_count -= category_group->category_count;
             //        --pm->annual_category_groups_count;
 
-            //        dll_remove(category_group);
+            //        dll_remove_old(category_group);
             //        pool_free(pm->category_group_pool, category_group);
             //    }
             //    ImGui::PopID();
@@ -1488,7 +1488,6 @@ draw_entire_ui(void){
                             String8 cat_part = str8_format(tm->frame_arena, "%s: ", category_group->name);
                             String8 name_part = str8(category->name, length + 1); // + 1 to include 0 terminater
                             String8 full = str8_concatenate(tm->frame_arena, cat_part, name_part);
-                            full.count -= 1; // don't consider null terminator in count
                             *category_item = full;
                         }
                     }
@@ -1533,7 +1532,7 @@ draw_entire_ui(void){
             if(pm->csv_profile_count == 0){
                 if(pm->csv_profile_count < MAX_PROFILE_COUNT){
                     CSV_Profile* profile = (CSV_Profile*)pool_next(pm->csv_profile_pool);
-                    dll_push_back(pm->csv_profiles, profile);
+                    dll_push_back_old(pm->csv_profiles, profile);
                     pm->csv_profile_count++;
                     pm->csv_profile_idx = 0;
                 }
@@ -1575,7 +1574,7 @@ draw_entire_ui(void){
                 if(ImGui::Button("+##add_profile")){
                     if(pm->csv_profile_count < MAX_PROFILE_COUNT){
                         profile = (CSV_Profile*)pool_next(pm->csv_profile_pool);
-                        dll_push_back(pm->csv_profiles, profile);
+                        dll_push_back_old(pm->csv_profiles, profile);
                         ++pm->csv_profile_count;
                         pm->csv_profile_idx = pm->csv_profile_count - 1;
                     }
@@ -1588,7 +1587,7 @@ draw_entire_ui(void){
                 ImGui::SameLine();
                 if(ImGui::Button("x##delete_profile")){
                     if(pm->csv_profile_count > 0){
-                        dll_remove(profile);
+                        dll_remove_old(profile);
                         pool_free(pm->csv_profile_pool, profile);
 
                         --pm->csv_profile_count;
@@ -1899,7 +1898,6 @@ draw_entire_ui(void){
                     if(!show_all_merchants && !merch->hidden){
                         continue;
                     }
-                    String8 merch_category = str8_cstring(merch->category);
 
                     ImGui::TableNextRow();
 
@@ -1915,7 +1913,8 @@ draw_entire_ui(void){
                     // note: color selection red if not found in category_group names
                     ImVec4 frame_bg_color = ImGui::GetStyleColorVec4(ImGuiCol_FrameBg);
                     bool found = false;
-                    if(!str8_compare(merch_category, empty_category)){
+                    char space[] = " ";
+                    if(!char_compare(merch->category, space)){
                         CategoryGroup* category_group = pm->month_category_groups;
                         for(s32 c_idx = 0; c_idx < pm->category_groups_count && !found; ++c_idx){
                             category_group = category_group->next;
@@ -1923,13 +1922,14 @@ draw_entire_ui(void){
                             Category* category = category_group->categories;
                             for(s32 r_idx = 0; r_idx < category_group->category_count && !found; ++r_idx){
                                 category = category->next;
+                                String8 merch_category = str8_cstring(merch->category);
 
-                                String8 cat_part = str8_format(tm->frame_arena, "%s: ", category_group->name);
-                                String8 name_part = str8(category->name, char_length(category->name));
-                                String8 category_name = str8_concatenate(tm->frame_arena, cat_part, name_part);
+                                String8 cat_group_part = str8_format(tm->frame_arena, "%s: ", category_group->name);
+                                String8 cat_part = str8(category->name, char_length(category->name));
+                                String8 cat = str8_concatenate(tm->frame_arena, cat_group_part, cat_part);
 
-                                if(category_name.count == merch_category.count){
-                                    if(str8_compare(merch_category, category_name)){
+                                if(cat.count == merch_category.count){
+                                    if(str8_compare(cat, merch_category)){
                                         found = true;
                                     }
                                 }
@@ -1949,7 +1949,7 @@ draw_entire_ui(void){
                     //bool selected = false;
                     s32 color_idx = 0;
                     fmt = str8_fmt(scratch.arena, "##merchant_group_select%i", merch->id);
-                    if(ImGui::BeginCombo((char*)fmt.data, (char*)merch_category.str, ImGuiComboFlags_HeightLarge)){
+                    if(ImGui::BeginCombo((char*)fmt.data, merch->category, ImGuiComboFlags_HeightLarge)){
                         for(int n = 0; n < pm->category_list_count; n++){
                             String8 selection_item = pm->category_list[n];
 
@@ -1964,9 +1964,9 @@ draw_entire_ui(void){
                                 }
                                 else{
                                     //s64 idx = str8_index_from_left(last_combo_name, ':');
-                                    String8Node* split_node1 = str8_split(tm->frame_arena, last_combo_name, ':');
-                                    String8Node* split_node2 = str8_split(tm->frame_arena, selection_item, ':');
-                                    if(!str8_compare(split_node1->next->str, split_node2->next->str)){
+                                    String8List split_node1 = str8_split(tm->frame_arena, last_combo_name, ':', 0);
+                                    String8List split_node2 = str8_split(tm->frame_arena, selection_item, ':', 0);
+                                    if(!str8_compare(split_node1.first->string, split_node2.first->string)){
                                         ++color_idx;
                                     }
                                     last_combo_name = selection_item;
@@ -1978,6 +1978,8 @@ draw_entire_ui(void){
                                 }
                             }
 
+                            // todo: doint this merch->category multiple times
+                            String8 merch_category = str8_cstring(merch->category);
                             const bool is_selected = str8_compare(selection_item, merch_category);
                             if(ImGui::Selectable((char*)selection_item.str, is_selected)){
                                 memcpy(merch->category, selection_item.str, selection_item.count);
@@ -2095,7 +2097,7 @@ draw_entire_ui(void){
                     Transaction* t = month->transactions;
                     for(s32 t_idx=0; t_idx < month->transaction_count; ++t_idx){
                         t = t->next;
-                        dll_remove(t);
+                        dll_remove_old(t);
                         pool_free(pm->transaction_pool, t);
                         t = month->transactions;
                     }
@@ -2136,7 +2138,7 @@ draw_entire_ui(void){
                         Transaction* t = month->transactions;
                         for(s32 t_idx=0; t_idx < month->transaction_count; ++t_idx){
                             t = t->next;
-                            dll_remove(t);
+                            dll_remove_old(t);
                             pool_free(pm->transaction_pool, t);
                             t = month->transactions;
                         }
@@ -2353,7 +2355,7 @@ draw_entire_ui(void){
                             Transaction* t = month->transactions;
                             for(s32 t_idx=0; t_idx < month->transaction_count; ++t_idx){
                                 t = t->next;
-                                dll_remove(t);
+                                dll_remove_old(t);
                                 pool_free(pm->transaction_pool, t);
                                 t = month->transactions;
                             }
@@ -2371,7 +2373,7 @@ draw_entire_ui(void){
                         if(ImGui::Button("+##add_transaction_button")){
                             if(pm->total_transaction_count < MAX_TRANSACTION_COUNT){
                                 Transaction* trans = (Transaction*)pool_next(pm->transaction_pool);
-                                dll_push_back(month->transactions, trans);
+                                dll_push_back_old(month->transactions, trans);
 
                                 if(month->transaction_count == 0){
                                     fmt = str8_fmt(scratch.arena, "01/01/%04d", year->number);
@@ -2381,12 +2383,12 @@ draw_entire_ui(void){
                                     Transaction* last = trans->prev;
                                     s32 date_length = (s32)char_length(last->date);
                                     String8 date_str8 = str8(last->date, date_length);
-                                    String8Node* parts = str8_split(scratch.arena, date_str8, '/');
-                                    parts->prev->str = str8_fmt(scratch.arena, "%04d", year->number);
+                                    String8List parts = str8_split(scratch.arena, date_str8, '/', 0);
+                                    parts.last->string = str8_fmt(scratch.arena, "%04d", year->number);
 
                                     String8Join join = {0};
                                     join.mid = str8_literal("/");
-                                    String8 result = str8_join(scratch.arena, parts, join);
+                                    String8 result = str8_join(scratch.arena, &parts, &join);
                                     memcpy((void*)trans->date, (void*)result.str, result.count);
                                 }
                                 memcpy((void*)trans->category, (void*)pm->category_list->str, pm->category_list->size);
@@ -2498,14 +2500,14 @@ draw_entire_ui(void){
                             Category* category = category_group->categories;
                             for(s32 r_idx = 0; r_idx < category_group->category_count && !found; ++r_idx){
                                 category = category->next;
-                                String8 trans_selection = str8(trans->category, char_length(trans->category));
+                                String8 trans_selection = str8_cstring(trans->category);
 
-                                String8 cat_part = str8_format(tm->frame_arena, "%s: ", category_group->name);
-                                String8 name_part = str8(category->name, char_length(category->name));
-                                String8 cat_category_name = str8_concatenate(tm->frame_arena, cat_part, name_part);
+                                String8 cat_group_part = str8_format(tm->frame_arena, "%s: ", category_group->name);
+                                String8 cat_part = str8(category->name, char_length(category->name));
+                                String8 cat = str8_concatenate(tm->frame_arena, cat_group_part, cat_part);
 
-                                if(cat_category_name.count == trans_selection.count){
-                                    if(str8_compare(trans_selection, cat_category_name)){
+                                if(cat.count == trans_selection.count){
+                                    if(str8_compare(cat, trans_selection)){
                                         found = true;
                                     }
                                 }
@@ -2528,7 +2530,8 @@ draw_entire_ui(void){
                     if(ImGui::BeginCombo((char*)fmt.data, trans->category, ImGuiComboFlags_HeightLarge)){
                         for(int n = 0; n < pm->category_list_count; n++){
                             String8 selection_item = pm->category_list[n];
-                            String8 trans_selection = str8(trans->category, char_length(trans->category));
+                            //String8 trans_selection = str8(trans->category, char_length(trans->category));
+                            String8 trans_selection = str8_cstring(trans->category);
 
                             ImDrawList* draw_list = ImGui::GetWindowDrawList();
                             ImVec2 min = ImGui::GetCursorScreenPos();
@@ -2541,9 +2544,9 @@ draw_entire_ui(void){
                                 }
                                 else{
                                     //s64 idx = str8_index_from_left(last_combo_name, ':');
-                                    String8Node* split_node1 = str8_split(tm->frame_arena, last_combo_name, ':');
-                                    String8Node* split_node2 = str8_split(tm->frame_arena, selection_item, ':');
-                                    if(!str8_compare(split_node1->next->str, split_node2->next->str)){
+                                    String8List split_node1 = str8_split(tm->frame_arena, last_combo_name, ':', 0);
+                                    String8List split_node2 = str8_split(tm->frame_arena, selection_item, ':', 0);
+                                    if(!str8_compare(split_node1.first->string, split_node2.first->string)){
                                         ++color_idx;
                                     }
                                     last_combo_name = selection_item;
@@ -2557,6 +2560,8 @@ draw_entire_ui(void){
 
                             const bool is_selected = str8_compare(selection_item, trans_selection);
                             if(ImGui::Selectable((char*)selection_item.str, is_selected)){
+                                String8 a = str8_lit("a");
+                                String8 b = str8_lit("b\0");
                                 memcpy((void*)trans->category, (void*)selection_item.str, selection_item.size + 1);
                                 if(!trans->locked){
                                     //consider: Why even have this, just have the operation here and be done with it.
@@ -2660,7 +2665,7 @@ draw_entire_ui(void){
                         --year->transaction_count;
                         --pm->total_transaction_count;
 
-                        dll_remove(trans);
+                        dll_remove_old(trans);
                         pool_free(pm->transaction_pool, trans);
                     }
                     tooltip(str8_literal("Delete Transaction."));
@@ -3023,7 +3028,6 @@ do_one_frame(void){
                         String8 m_description = str8_cstring(m->description);
                         if(str8_compare(m_description, trans_description)){
                             memcpy(trans->category, m->category, MERCH_CATEGORY_SIZE);
-                            //str8_copy_to_char(trans->category, m->category, m->category.count);
                             trans->merchant_id = m->id;
                             break;
                         }
@@ -3305,6 +3309,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         ImGui::PopFont();
         end_scratch(scratch);
 
+        generate_merchants();
         test_merchants();
 
         memory.initialized = true;
@@ -3319,9 +3324,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             DispatchMessage(&message);
         }
 
-        s32 a = 1;
         do_one_frame();
-        s32 b = 1;
     }
 
     //if(should_quit){
