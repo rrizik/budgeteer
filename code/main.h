@@ -1114,7 +1114,6 @@ generate_merchants(){
                 s32 count = array_count(country_states);
                 for(String8Node* node = parts.first; node != 0; ){
                     String8Node* next = node->next;
-
                     for(s32 idx = 0; idx < count; idx++){
                         String8 country_state = country_states[idx];
                         if(str8_compare(node->string, country_state)){
@@ -1122,7 +1121,6 @@ generate_merchants(){
                             break;
                         }
                     }
-
                     node = next;
                 }
 
@@ -1143,12 +1141,12 @@ generate_merchants(){
                 }
 
                 // trim domains
-                for(String8Node* node = parts.first; node != 0; node = node->next){
+                for(String8Node* node = parts.first; node != 0; ){
+                    String8Node* next = node->next;
+
                     String8 test1 = str8_lit("WWW.");
                     if(str8_starts_with(node->string, test1)){
-                        String8Node* remove_node = node;
-                        node = node->prev;
-                        dll_remove(&parts, remove_node);
+                        dll_remove(&parts, node);
                     }
 
                     String8 test2 = str8_lit(".COM");
@@ -1156,6 +1154,8 @@ generate_merchants(){
                         s32 idx = (s32)str8_index_from_left(node->string, test2);
                         str8_trim_right(&node->string, node->string.count - idx);
                     }
+
+                    node = next;
                 }
 
 
@@ -1201,30 +1201,28 @@ generate_merchants(){
 
                 // Remove < 2 count.
                 for(String8Node* node = parts.first; node != 0; ){
-                    if(is_white_list(node->string)){
-                        continue;
-                    }
-
                     String8Node* next = node->next;
-
-                    if(node->string.count == 1){
-                        dll_remove(&parts, node);
+                    if(!is_white_list(node->string)){
+                        if(node->string.count < 2){
+                            dll_remove(&parts, node);
+                        }
                     }
-
                     node = next;
                 }
 
                 // Remove preprocessor prefix from first node only.
-                count = array_count(processor_prefix);
-                for(s32 idx=0; idx < count; ++idx){
-                    if(str8_compare(parts.first->string, processor_prefix[idx])){
-                        dll_pop_front(&parts);
+                if(parts.node_count){
+                    count = array_count(processor_prefix);
+                    for(s32 idx=0; idx < count; ++idx){
+                        if(str8_compare(parts.first->string, processor_prefix[idx])){
+                            dll_pop_front(&parts);
+                        }
                     }
                 }
 
                 for(String8Node* node = parts.first; node != 0; ){
-                    String8Node* next = node;
-                    if( str8_contains(node->string, str8_lit("<###>")) &&
+                    String8Node* next = node->next;
+                   if( str8_contains(node->string, str8_lit("<###>")) &&
                        !str8_contains_alpha(node->string)){
                         dll_remove(&parts, node);
                     }
