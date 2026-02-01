@@ -38,6 +38,7 @@
 
 #include "tinyfiledialogs/tinyfiledialogs.h"
 #include "meta.h"
+#include "canonical_table.h"
 
 bool do_once = false;
 static String8 build_path;
@@ -118,6 +119,8 @@ wrap_index(s32 idx, s32 size){
     return(((idx % size) + size) % size);
 }
 
+CanonicalTable* canonical_table;
+
 #define CATEGORY_NAME_SIZE 128
 #define CATEGORY_PLANNED_SIZE 128
 typedef struct Category{
@@ -147,18 +150,21 @@ typedef struct CategoryGroup{
     bool muted;
 } CategoryGroup;
 
-global u64 merchant_id = 0;
+#define MAX_MERCHANT_COUNT 1024
 #define MERCH_DESCRIPTION_SIZE 1024
 #define MERCH_CATEGORY_SIZE 128
 typedef struct Merchant{
     Merchant* next;
+    Merchant* prev;
     u64 id;
 
+    char name[MERCH_DESCRIPTION_SIZE];
     char description[MERCH_DESCRIPTION_SIZE];
     char category[MERCH_CATEGORY_SIZE];
 
     bool hidden;
 } Merchant;
+global u64 merchant_id = 0;
 
 #define TRANS_DATE_SIZE 128
 #define TRANS_AMOUNT_SIZE 128
@@ -271,6 +277,7 @@ typedef struct CSV_Profile{
 #define MAX_TRANSACTION_COUNT 32768
 #define MAX_PROFILE_COUNT 32
 #define MAX_CATEGORY_LIST_COUNT 1024
+#define MAX_CANONICAL_MERCHANT_COUNT 65536
 typedef struct PermanentMemory{
     // memory
     Arena arena;
@@ -278,7 +285,15 @@ typedef struct PermanentMemory{
     PoolArena* category_pool;
     PoolArena* transaction_pool;
     PoolArena* csv_profile_pool;
+    PoolArena* merchant_pool;
+    Arena* canonical_table_arena;
+    Arena* merchant_arena;
     Arena* data_arena;
+
+    CanonicalTable* canonical_table;
+    CanonicalEntry* canonical_merchants_array[MAX_CANONICAL_MERCHANT_COUNT];
+    u64 canonical_merchants_idx;
+    u32 merchant_id;
 
     // category_group/categories/months/transactions
     CategoryGroup* annual_category_groups;
@@ -373,7 +388,7 @@ round_to_hundredth(f32 value){
 }
 
 static bool show_all_merchants = true;
-static bool apply_hidden_transactions = true;
+static bool apply_hidden_transactions = false;
 static bool apply_new_category = false;
 static String8 empty_category = str8_literal(" \0");
 static String8 empty_deserialized_category = str8_literal(" \x1B");
@@ -851,19 +866,70 @@ global String8 white_list[] = {
 };
 
 global String8 processor_prefix[] = {
-   str8_lit("SQ"),
-   str8_lit("SQ*"),
-   str8_lit("VC*"),
-   str8_lit("PY*"),
-   str8_lit("TST*"),
-   str8_lit("WL*"),
-   str8_lit("WP*"),
-   str8_lit("WT*"),
-   str8_lit("AA*"),
-   str8_lit("VC"),
+    str8_lit("SQ"),  str8_lit("VC"),  str8_lit("PY"),
+    str8_lit("TST"), str8_lit("WL"),  str8_lit("WP"),
+    str8_lit("WT"),  str8_lit("AA"),  str8_lit("VC"),
+    str8_lit("SP"),  str8_lit("WAL"), str8_lit("NON"),
+    str8_lit("NNT"), str8_lit("SPO"), str8_lit("NTX"),
+    str8_lit("NST"), str8_lit("CTLP"), str8_lit("CTLP"),
+    str8_lit("FSP"), str8_lit("BPK"), str8_lit("GB"),
+    str8_lit("UEP"), str8_lit("FIV"), str8_lit("CPI"),
+    str8_lit("AFP"), str8_lit("DOC"), str8_lit("TLF"),
+};
+
+global String8 address_markers[] = {
+    str8_lit("ST"), str8_lit("RD"), str8_lit("DR"), str8_lit("HWY"), str8_lit("AVE"), str8_lit("AVENUE"),
+    str8_lit("PKWY"), str8_lit("PLAZA"), str8_lit("SUITE"), str8_lit("STE"), str8_lit("UNIT"),
+    str8_lit("N"), str8_lit("S"), str8_lit("E"), str8_lit("W"),
+
+    str8_lit("LN"), str8_lit("LANE"), str8_lit("CT"), str8_lit("COURT"), str8_lit("CIR"), str8_lit("CIRCLE"),
+    str8_lit("PL"), str8_lit("PLACE"), str8_lit("WAY"), str8_lit("TRL"), str8_lit("TRAIL"), str8_lit("TER"),
+    str8_lit("TERRACE"), str8_lit("PKY"), str8_lit("EXPY"), str8_lit("EXPRESSWAY"), str8_lit("FWY"), str8_lit("FREEWAY"),
+    str8_lit("TPKE"), str8_lit("TURNPIKE"), str8_lit("PIKE"), str8_lit("BYP"), str8_lit("BYPASS"), str8_lit("LOOP"),
+    str8_lit("ALY"), str8_lit("ALLEY"), str8_lit("PASS"), str8_lit("XING"), str8_lit("CROSSING"), str8_lit("PTPOINT"),
+    str8_lit("SQSQUARE"), str8_lit("PLZ"), str8_lit("Unit"), str8_lit("building"), str8_lit("APT"), str8_lit("APARTMENT"),
+    str8_lit("BUILDING"), str8_lit("RM"), str8_lit("ROOM"), str8_lit("FL"), str8_lit("FLR"),
+    str8_lit("DEPT"), str8_lit("LOT"), str8_lit("SPC"), str8_lit("SPACE"), str8_lit("PO"), str8_lit("BOX"),
+    str8_lit("BLDG"), str8_lit("BLDG."), str8_lit("US"), str8_lit("ZIP"),
+};
+
+global String8 noise_tokens2[] = {
+    str8_lit("AZUS"), str8_lit("CAUS"), str8_lit("COUS"),
+    str8_lit("DEUS"), str8_lit("FLUS"), str8_lit("ILUS"),
+    str8_lit("KSUS"), str8_lit("MAUS"), str8_lit("MNUS"),
+    str8_lit("MTUS"), str8_lit("NCUS"), str8_lit("NHUS"),
+    str8_lit("NJUS"), str8_lit("NMUS"), str8_lit("NYUS"),
+    str8_lit("OHUS"), str8_lit("OKUS"), str8_lit("PAUS"),
+    str8_lit("RIUS"), str8_lit("TNUS"), str8_lit("TXUS"),
+    str8_lit("UTUS"), str8_lit("WAUS"), str8_lit("HKHK"),
+    str8_lit("MXMX"), str8_lit("CYCY"), str8_lit("USA"),
+
+    str8_lit("DIR"), str8_lit("DEP"), str8_lit("INTERNET"),
+    str8_lit("TRANSFER"), str8_lit("FROM"), str8_lit("TO"),
+    str8_lit("SAV"), str8_lit("WEB"), str8_lit("TERM"),
+    str8_lit("TRANSACTION"),
+
+    str8_lit("AMZN"), str8_lit("COM"), str8_lit("BILL"), str8_lit("WWW"),
+
+    str8_lit("ST"), str8_lit("RD"), str8_lit("DR"),
+    str8_lit("AVE"), str8_lit("AVENUE"), str8_lit("BLVD"),
+    str8_lit("HWY"), str8_lit("PKWY"), str8_lit("LN"),
+    str8_lit("LANE"), str8_lit("CT"), str8_lit("CIR"),
+    str8_lit("ROAD"), str8_lit("STREET"), str8_lit("LOOP"),
+    str8_lit("FM"), str8_lit("INTERSTATE"), str8_lit("SUITE"),
+    str8_lit("STE"), str8_lit("UNIT"), str8_lit("HIGHWAY"),
+    str8_lit("N"), str8_lit("S"), str8_lit("E"), str8_lit("W"),
+    str8_lit("NE"), str8_lit("NW"), str8_lit("SE"), str8_lit("SW"),
+    str8_lit("NORTH"), str8_lit("SOUTH"), str8_lit("EAST"), str8_lit("WEST"),
+    str8_lit("US"),
 };
 
 global String8 noise_tokens[] = {
+    str8_lit("NORTH"),
+    str8_lit("SOUTH"),
+    str8_lit("EAST"),
+    str8_lit("WEST"),
+
     str8_lit("ROUND"),
     str8_lit("UP"),
     str8_lit("TRANSFER"),
@@ -886,7 +952,6 @@ global String8 noise_tokens[] = {
     str8_lit("INT"),
     str8_lit("TST"),
     str8_lit("NNT"),
-    str8_lit("NTTA"),
     str8_lit("HCTRA"),
     str8_lit("ATGPAY"),
 
@@ -900,23 +965,6 @@ global String8 noise_tokens[] = {
     str8_lit("OFFIC"),
     str8_lit("ONLINE"),
 
-    str8_lit("ST"),
-    str8_lit("RD"),
-    str8_lit("DR"),
-    str8_lit("HWY"),
-    str8_lit("AVE"),
-    str8_lit("AVENUE"),
-    str8_lit("PKWY"),
-    str8_lit("PLAZA"),
-    str8_lit("SUITE"),
-    str8_lit("STE"),
-    str8_lit("UNIT"),
-    str8_lit("FLOOR"),
-    str8_lit("N"),
-    str8_lit("S"),
-    str8_lit("E"),
-    str8_lit("W"),
-
     str8_lit("STATE"),
     str8_lit("HIGHWAY"),
     str8_lit("LOS"),
@@ -924,9 +972,11 @@ global String8 noise_tokens[] = {
     str8_lit("BUDA"),
     str8_lit("AUSTIN"),
     str8_lit("PLANO"),
+    str8_lit("PAPLANO"),
     str8_lit("RIOS"),
     str8_lit("STPLANO"),
     str8_lit("PARK"),
+    str8_lit("PARKER"),
     str8_lit("DALLAS"),
     str8_lit("MCKINNEY"),
     str8_lit("RICHARDSON"),
@@ -998,17 +1048,30 @@ static bool is_white_list(String8 string){
     return(result);
 }
 
+static s32
+canonical_merchants_qsort(void *left, void *right){
+    CanonicalEntry* a = *(CanonicalEntry**)left;
+    CanonicalEntry* b = *(CanonicalEntry**)right;
+    return(str8_compare_order(a->name, b->name));
+}
+
 static void
 generate_merchants(){
+    // collecting here so we can quick_sort()
+    String8 string_array[4096] = {0};
+    s32 string_array_idx = 0;
+
     ScratchArena scratch = begin_scratch(0);
     Arena* arena = pm->data_arena;
 
+    // iter over all transactions to generate merchants
     for(s32 year_idx=0; year_idx < MAX_YEAR_COUNT; ++year_idx){
         Year* year = pm->years + year_idx;
         for(s32 month_idx=0; month_idx < Month_Count; ++month_idx){
             MonthInfo* month = year->months + month_idx;
             for(Transaction* trans = month->transactions->next; trans != month->transactions; trans = trans->next){
 
+                //String8 string = str8_cstring(trans->description);
                 String8 string = {0};
                 string.str = push_array(scratch.arena, u8, TRANS_DESCRIPTION_SIZE);
                 u64 length = char_length(trans->description);
@@ -1018,58 +1081,10 @@ generate_merchants(){
 
                 str8_to_upper(&string);
 
-                // Filter out disallowed characters.
-                for(s32 i=0; i < string.count; ++i){
-                    char byte = string.str[i];
-                    if(!byte_is_alnum(byte) &&
-                       !byte_is_space(byte) &&
-                        byte != '/' &&
-                        byte != '.' &&
-                        byte != '-' &&
-                        byte != '\''){
-
-                        //print("%c\n", (char)byte);
-                        string.str[i] = ' ';
-                    }
-                }
-
-                // Trim all white space from start and end.
-                while(str8_ends_with_byte(string, ' ')){
-                    str8_trim_right(&string, 1);
-                }
-                while(str8_starts_with_byte(string, ' ')){
-                    str8_trim_left(&string, 1);
-                }
-
-                // Trim multiple spaces down to 1.
-                s32 space_count = 0;
-                s32 write_idx = 0;
-                for(s32 read_idx=0; read_idx < string.count; ++read_idx){
-                    u8 byte = string.str[read_idx];
-
-                    if(byte_is_space(byte)){
-                        space_count++;
-                    }
-                    else{
-                        space_count = 0;
-                    }
-
-                    if(space_count <= 1){
-                        string.str[write_idx++] = byte;
-                    }
-                }
-                string.count = write_idx;
-
-                // alternative to the above code
-                //String8List parts = str8_split(scratch.arena, trans_description, ' ', 0);
-                //String8Join join = {0};
-                //join.mid = str8_lit(" ");
-                //String8 result = str8_join(scratch.arena, parts, join);
-
-                // replace numbers with <###>
+                // replace numbers with NNNNN
                 char tmp[1024] = {0};
                 s32 digit_count = 0;
-                write_idx = 0;
+                s32 write_idx = 0;
                 for(s32 read_idx = 0; read_idx < string.count; ++read_idx){
                     u8 byte = string.str[read_idx];
 
@@ -1078,11 +1093,22 @@ generate_merchants(){
                     }
                     else{
                         if(digit_count >= 3){
-                            tmp[write_idx++] = '<';
-                            tmp[write_idx++] = '#';
-                            tmp[write_idx++] = '#';
-                            tmp[write_idx++] = '#';
-                            tmp[write_idx++] = '>';
+                            // space before <###> if previous output is alnum
+                            if(write_idx > 0 && byte_is_alnum((u8)tmp[write_idx - 1])){
+                                tmp[write_idx++] = ' ';
+                            }
+
+                            tmp[write_idx++] = 'N';
+                            tmp[write_idx++] = 'N';
+                            tmp[write_idx++] = 'N';
+                            tmp[write_idx++] = 'N';
+                            tmp[write_idx++] = 'N';
+
+                            // space after <###> if current non-digit is alnum (would glue)
+                            if(byte_is_alnum(byte)){
+                                tmp[write_idx++] = ' ';
+                            }
+
                             tmp[write_idx++] = (char)byte;
                         }
                         else if(digit_count != 0){
@@ -1098,172 +1124,355 @@ generate_merchants(){
                         digit_count = 0;
                     }
                 }
-                if(digit_count >= 3){
-                    tmp[write_idx++] = '<';
+                if(digit_count >= 3){ // if the last nodes characters are numbers
+                    if(write_idx > 0 && byte_is_alnum((u8)tmp[write_idx - 1])){
+                        tmp[write_idx++] = ' ';
+                    }
+
                     tmp[write_idx++] = 'N';
-                    tmp[write_idx++] = 'U';
-                    tmp[write_idx++] = 'M';
-                    tmp[write_idx++] = '>';
+                    tmp[write_idx++] = 'N';
+                    tmp[write_idx++] = 'N';
+                    tmp[write_idx++] = 'N';
+                    tmp[write_idx++] = 'N';
+                }
+                else if(digit_count > 0){
+                    for(s32 k=digit_count; k > 0; --k){
+                        tmp[write_idx++] = (char)string.str[string.count - k];
+                    }
                 }
                 string = str8(tmp, write_idx);
 
-                // tokenize the string
-                String8List parts = str8_split(scratch.arena, string, ' ', 0);
-
-                // truncate on country state code
-                s32 count = array_count(country_states);
-                for(String8Node* node = parts.first; node != 0; ){
-                    String8Node* next = node->next;
-                    for(s32 idx = 0; idx < count; idx++){
-                        String8 country_state = country_states[idx];
-                        if(str8_compare(node->string, country_state)){
-                            dll_remove(&parts, node);
-                            break;
-                        }
-                    }
-                    node = next;
-                }
-
-                // remove noise
-                count = array_count(noise_tokens);
-                for(String8Node* node = parts.first; node != 0; ){
-                    String8Node* next = node->next;
-
-                    for(s32 idx = 0; idx < count; idx++){
-                        String8 token = noise_tokens[idx];
-                        if(str8_compare(node->string, token)){
-                            dll_remove(&parts, node);
-                            break;
-                        }
-                    }
-
-                    node = next;
-                }
-
-                // trim domains
-                for(String8Node* node = parts.first; node != 0; ){
-                    String8Node* next = node->next;
-
-                    String8 test1 = str8_lit("WWW.");
-                    if(str8_starts_with(node->string, test1)){
-                        dll_remove(&parts, node);
-                    }
-
-                    String8 test2 = str8_lit(".COM");
-                    if(str8_contains(node->string, test2)){
-                        s32 idx = (s32)str8_index_from_left(node->string, test2);
-                        str8_trim_right(&node->string, node->string.count - idx);
-                    }
-
-                    node = next;
-                }
-
-
-                for(String8Node* node = parts.first; node != 0; node = node->next){
-                    if(is_white_list(node->string)){
+                // filter out disallowed characters
+                for(s32 i=0; i < string.count; ++i){
+                    u8 byte = string.str[i];
+                    if(byte_is_alnum(byte) || byte_is_space(byte)){
                         continue;
                     }
 
-                    s32 digit_count = 0;
-                    if(node->string.count == 2){
-                        if(byte_is_alpha(node->string.str[0]) &&
-                           byte_is_digit(node->string.str[node->string.count - 1])){
-                            digit_count = 1;
+                    // Keep apostrophe inside a word: O'REILLY
+                    // Keep '&' inside a word: AT&T, H&M
+                    // Keep '-' inside an alnum run: 7-ELEVEN or WAL-MART
+                    if(i > 0 && (i + 1) < (s32)string.count){
+                        u8 left = (u8)string.str[i - 1];
+                        u8 right = (u8)string.str[i + 1];
+
+                        if((byte == '\'' || byte == '&') && byte_is_alpha(left) && byte_is_alpha(right)){
+                            continue;
+                        }
+                        if(byte == '-' && byte_is_alnum(left) && byte_is_alnum(right)){
+                            continue;
                         }
                     }
-                    else if(node->string.count > 2){
-                        if(byte_is_alpha(node->string.str[0]) &&
-                           byte_is_digit(node->string.str[node->string.count - 1]) &&
-                           byte_is_digit(node->string.str[node->string.count - 2])){
-                            digit_count = 2;
-                        }
-                    }
-
-                    if(digit_count != 0){
-                       str8_trim_right(&node->string, digit_count);
-                    }
+                    string.str[i] = ' ';
                 }
 
-                // Remove digis only or <###>.
-                for(String8Node* node = parts.first; node != 0; ){
-                    String8Node* next = node->next;
+                // todo: do I need this if I have the for loop right after this?
+                // Trim all white space from start and end.
+                //while(str8_starts_with_byte(string, ' ')){
+                //    str8_trim_left(&string, 1);
+                //}
+                //while(str8_ends_with_byte(string, ' ')){
+                //    str8_trim_right(&string, 1);
+                //}
 
-                    if(str8_is_digit(node->string)){
-                        dll_remove(&parts, node);
-                    }
-                    else if(str8_compare(node->string, str8_lit("<###>")) ||
-                            str8_compare(node->string, str8_lit(""))){
-                        dll_remove(&parts, node);
-                    }
+                // consider: alternative to the above code, not sure which is faster, will have to time it.
+                //String8List parts = str8_split(scratch.arena, trans_description, ' ', 0);
+                //String8Join join = {0};
+                //join.mid = str8_lit(" ");
+                //String8 result = str8_join(scratch.arena, parts, join);
 
-                    node = next;
-                }
+                // tokenize the string, this also implicitely removes multiple spaces between words.
+                String8List parts = str8_split(scratch.arena, string, ' ');
 
-                // Remove < 2 count.
-                for(String8Node* node = parts.first; node != 0; ){
-                    String8Node* next = node->next;
-                    if(!is_white_list(node->string)){
-                        if(node->string.count < 2){
-                            dll_remove(&parts, node);
-                        }
-                    }
-                    node = next;
-                }
+                // truncate on country state code
+                //s32 count = array_count(country_states);
+                //for(String8Node* node = parts.first; node != 0; node = node->next){
+                //    bool found = false;
+                //    for(s32 idx = 0; idx < count; idx++){
+                //        String8 country_state = country_states[idx];
+                //        if(str8_compare(node->string, country_state)){
+                //            found = true;
+                //            break;
+                //        }
+                //    }
+                //    if(found){
+                //        while(parts.last != node){
+                //            dll_pop_last(&parts);
+                //        }
+                //        dll_pop_last(&parts);
+                //        break;
+                //    }
+                //}
 
-                // Remove preprocessor prefix from first node only.
-                if(parts.node_count){
-                    count = array_count(processor_prefix);
-                    for(s32 idx=0; idx < count; ++idx){
-                        if(str8_compare(parts.first->string, processor_prefix[idx])){
-                            dll_pop_front(&parts);
-                        }
-                    }
-                }
+                // DON"T WANT I DON"T THINK trim domains
+                //for(String8Node* node = parts.first; node != 0; ){
+                //    String8Node* next = node->next;
+                //    String8 test1 = str8_lit("WWW.");
+                //    if(str8_starts_with(node->string, test1)){
+                //        dll_remove(&parts, node);
+                //    }
 
-                for(String8Node* node = parts.first; node != 0; ){
-                    String8Node* next = node->next;
-                   if( str8_contains(node->string, str8_lit("<###>")) &&
-                       !str8_contains_alpha(node->string)){
-                        dll_remove(&parts, node);
-                    }
-                    node = next;
-                }
+                //    String8 test2 = str8_lit(".COM");
+                //    if(str8_contains(node->string, test2)){
+                //        s32 idx = (s32)str8_index_from_left(node->string, test2);
+                //        str8_trim_right(&node->string, node->string.count - idx);
+                //    }
+                //    node = next;
+                //}
 
-                //// trim <###>
+                // todo: not sure what this section is looking for
+                //for(String8Node* node = parts.first; node != 0; node = node->next){
+                //    if(is_white_list(node->string)){
+                //        continue;
+                //    }
+
+                //    s32 digit_count = 0;
+                //    if(node->string.count == 2){
+                //        if(byte_is_alpha(node->string.str[0]) &&
+                //           byte_is_digit(node->string.str[node->string.count - 1])){
+                //            digit_count = 1;
+                //        }
+                //    }
+                //    else if(node->string.count > 2){
+                //        if(byte_is_alpha(node->string.str[0]) &&
+                //           byte_is_digit(node->string.str[node->string.count - 1]) &&
+                //           byte_is_digit(node->string.str[node->string.count - 2])){
+                //            digit_count = 2;
+                //        }
+                //    }
+
+                //    if(digit_count != 0){
+                //       str8_trim_right(&node->string, digit_count);
+                //    }
+                //}
+
+                // Remove digis only or <###> or "" or <###>-<###> like things or count <= 2.
+                //for(String8Node* node = parts.first; node != 0; ){
+                //    String8Node* next = node->next;
+                //    if(!is_white_list(node->string)){
+                //        if(str8_is_digit(node->string)){
+                //            dll_remove(&parts, node);
+                //        }
+                //        else if(str8_compare(node->string, str8_lit("<###>"))){
+                //            dll_remove(&parts, node);
+                //        }
+                //        else if(str8_contains(node->string, str8_lit("<###>")) && !str8_contains_alpha(node->string)){
+                //            dll_remove(&parts, node);
+                //        }
+                //        else if(str8_compare(node->string, str8_lit(""))){
+                //            dll_remove(&parts, node);
+                //        }
+                //        //else if(node->string.count <= 2){
+                //        //    dll_remove(&parts, node);
+                //        //}
+                //    }
+                //    node = next;
+                //}
+
+                // Strim strings that contain <###>
                 //for(String8Node* node = parts.first; node != 0; node = node->next){
                 //    String8 test = str8_lit("<###>");
                 //    if(str8_ends_with(node->string, test)){
-                //        str8_trim_right(&node->string, 5);
+                //        str8_trim_right(&node->string, test.count);
                 //    }
 
                 //    if(str8_starts_with(node->string, test)){
-                //        str8_trim_left(&node->string, 5);
-                //    }
-
-                //    if(node->string.count <= 2){
-                //        String8Node* remove_node = node;
-                //        node = node->prev;
-                //        dll_remove(&parts, remove_node);
+                //        str8_trim_left(&node->string, test.count);
                 //    }
                 //}
+
+                //for(String8Node* node = parts.first; node != 0; node = node->next){
+                //    String8 test1 = str8_lit("<###>");
+                //    String8 test2 = str8_lit("-<###>");
+                //    bool not_found = false;
+                //    while(!not_found){
+                //        if(str8_ends_with(node->string, test1)){
+                //            str8_trim_right(&node->string, test1.count);
+                //        }
+                //        else if(str8_ends_with(node->string, test2)){
+                //            str8_trim_right(&node->string, test2.count);
+                //        }
+                //        else{
+                //            not_found = true;
+                //        }
+                //    }
+
+                //    not_found = false;
+                //    while(!not_found){
+                //        if(str8_ends_with(node->string, test1)){
+                //            str8_trim_right(&node->string, test1.count);
+                //        }
+                //        else if(str8_ends_with(node->string, test2)){
+                //            str8_trim_right(&node->string, test2.count);
+                //        }
+                //        else{
+                //            not_found = true;
+                //        }
+                //    }
+
+                //    if(str8_contains(node->string, test1)){
+                //        u32 a = 1;
+                //    }
+                //}
+
+                // Remove preprocessor prefix from first node only.
+                bool found = true;
+                while(parts.first && found){
+                    found = false;
+                    for(s32 idx=0; idx < array_count(processor_prefix); ++idx){
+                        if(str8_compare(parts.first->string, processor_prefix[idx])){
+                            found = true;
+                            dll_pop_front(&parts);
+                            break;
+                        }
+                    }
+                }
+
+                // remove noise
+                s32 count = array_count(noise_tokens2);
+                for(String8Node* node = parts.first; node != 0; ){
+                    String8Node* next = node->next;
+                    if(str8_contains(node->string, str8_lit("NNNNN"))){
+                        dll_remove(&parts, node);
+                    }
+                    else{
+                        for(s32 idx = 0; idx < count; idx++){
+                            String8 token = noise_tokens2[idx];
+                            if(str8_compare(node->string, token)){
+                                dll_remove(&parts, node);
+                                break;
+                            }
+                        }
+                    }
+                    node = next;
+                }
 
                 String8Join join = {0};
                 join.mid = str8_lit(" ");
                 string = str8_join(scratch.arena, &parts, &join);
+
                 if(string.count == 0){
                     string = str8_lit("UNKNOWN");
                 }
-                arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "%.*s\n", (int)string.count, string.str);
+
+
+                CanonicalEntry* result = canonical_table_lookup(pm->canonical_table, string);
+                if(result != 0){
+                    result->count++;
+                }
+                else{
+                    CanonicalEntry* merchant = push_struct(pm->merchant_arena, CanonicalEntry);
+                    merchant->name = str8_push_copy(pm->merchant_arena, string);
+                    merchant->count = 1;
+                    canonical_table_insert(pm->canonical_table, merchant->name, merchant);
+
+                    assert(pm->canonical_merchants_idx < MAX_CANONICAL_MERCHANT_COUNT);
+                    pm->canonical_merchants_array[pm->canonical_merchants_idx++] = merchant;
+                }
+            }
+        }
+    }
+
+    quick_sort(pm->canonical_merchants_array, pm->canonical_merchants_idx, canonical_merchants_qsort);
+
+    for(s32 idx = 0; idx < pm->canonical_merchants_idx; ++idx){
+        CanonicalEntry* cm = pm->canonical_merchants_array[idx];
+        String8 value = cm->name;
+        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "%.*s\n", (int)value.count, value.str);
+    }
+
+    // todo: remove when done
+    String8 full_path = str8_path_append(scratch.arena, saves_path, str8_literal("test6.b"));
+    File file = os_file_open(full_path, GENERIC_WRITE, CREATE_ALWAYS);
+    if(file.handle != INVALID_HANDLE_VALUE){
+        os_file_write(file, arena->base, arena->at);
+    }
+    os_file_close(file);
 
 
 
+    arena_free(pm->data_arena);
+    pm->merchant_id = 1;
+    CanonicalEntry* shortest_entry = 0;
+    String8List shortest_entry_parts = {0};
+    for(u32 start_idx = 0; start_idx < pm->canonical_merchants_idx; ){
+        CanonicalEntry* start_entry = pm->canonical_merchants_array[start_idx];
+        String8List start_entry_parts = str8_split(scratch.arena, start_entry->name, ' ');
+        start_entry->merchant_id = pm->merchant_id;
+
+        shortest_entry = start_entry;
+        shortest_entry_parts = str8_split(scratch.arena, shortest_entry->name, ' ');
+
+        u32 end_idx = start_idx + 1;
+        for(; end_idx < pm->canonical_merchants_idx; ++end_idx){
+            CanonicalEntry* end_entry = pm->canonical_merchants_array[end_idx];
+            String8List end_entry_parts = str8_split(scratch.arena, end_entry->name, ' ');
+            if(str8_compare(start_entry_parts.first->string, end_entry_parts.first->string)){
+                end_entry->merchant_id = pm->merchant_id;
+                if(shortest_entry_parts.node_count > end_entry_parts.node_count){
+                    shortest_entry = end_entry;
+                    shortest_entry_parts = end_entry_parts;
+                }
+            }
+            else{
+                break;
+            }
+        }
 
 
+        String8List result_parts = {0};
+        u32 count = 0;
+        for(String8Node* n = shortest_entry_parts.first; n != 0; n = n->next){
+       
+            bool matching = true;
+            CanonicalEntry* test_entry = shortest_entry;
+            String8List test_entry_parts = shortest_entry_parts;
+            String8Node* test_node = shortest_entry_parts.first;
+            for(u32 test_idx = start_idx; test_idx < end_idx; ++test_idx){
+                test_entry = pm->canonical_merchants_array[test_idx];
+                test_entry_parts = str8_split(scratch.arena, test_entry->name, ' ');
+                test_node = test_entry_parts.first;
+
+                u32 num = 0;
+                while(num < count){
+                    test_node = test_node->next;
+                    num++;
+                }
+
+                if(test_node == 0 || !str8_compare(n->string, test_node->string)){
+                    matching = false;
+                }
+            }
+
+            if(matching){
+                str8_list_push(scratch.arena, &result_parts, test_node->string);
+            }
+            else{
+                break;
+            }
+            count++;
+        }
+
+        String8Join join = {0};
+        join.mid = str8_lit(" ");
+        String8 result = str8_join(pm->merchant_arena, &result_parts, &join);
+        arena->at += snprintf((char*)arena->base + arena->at, arena->size - arena->at, "%.*s\n", (int)result.count, result.str);
+
+        pm->merchant_id++;
+        start_idx = end_idx;
+    }
+
+    // todo: remove when done
+    full_path = str8_path_append(scratch.arena, saves_path, str8_literal("test7.b"));
+    file = os_file_open(full_path, GENERIC_WRITE, CREATE_ALWAYS);
+    if(file.handle != INVALID_HANDLE_VALUE){
+        os_file_write(file, arena->base, arena->at);
+    }
+    os_file_close(file);
 
 
-
-
-
+    end_scratch(scratch);
+    arena_free(pm->data_arena);
 
 
                 //String8Join join = {0};
@@ -1293,20 +1502,6 @@ generate_merchants(){
 
                 //    trans->merchant_id = merch->id;
                 //}
-            }
-        }
-    }
-
-    String8 full_path = str8_path_append(scratch.arena, saves_path, str8_literal("test.b"));
-    File file = os_file_open(full_path, GENERIC_WRITE, CREATE_ALWAYS);
-    if(file.handle != INVALID_HANDLE_VALUE){
-        os_file_write(file, arena->base, arena->at);
-    }
-    os_file_close(file);
-
-    end_scratch(scratch);
-    arena_free(pm->data_arena);
-
 }
 
 static void
@@ -1316,7 +1511,7 @@ parse_day_month_year(Transaction* trans){
     CSV_Profile* profile = pm->csv_profile;
     char delimiter = date_delimiters[profile->date_format_kind];
     String8 transaction_date = str8_cstring(trans->date);
-    String8List date_parts = str8_split(scratch.arena, transaction_date, delimiter, 0);
+    String8List date_parts = str8_split(scratch.arena, transaction_date, delimiter);
 
     //String8 dd, mm, yyyy;
     switch(profile->date_format_kind){
@@ -1375,7 +1570,7 @@ test_date_against_format(String8 date){
     }
 
     ScratchArena scratch = begin_scratch();
-    String8List date_parts = str8_split(scratch.arena, date, delimiter, 0);
+    String8List date_parts = str8_split(scratch.arena, date, delimiter);
 
     String8 dd, mm, yyyy;
     switch(profile->date_format_kind){
@@ -1723,7 +1918,7 @@ deserialize_config(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8List str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node.first->string;
                     String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
@@ -1749,7 +1944,7 @@ deserialize_config(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8List str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node.first->string;
                     String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
@@ -1786,7 +1981,7 @@ deserialize_config(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8List str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node.first->string;
                     String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
@@ -1810,7 +2005,7 @@ deserialize_config(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8List str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node.first->string;
                     String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
@@ -1840,7 +2035,7 @@ deserialize_config(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8List str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node.first->string;
                     String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
@@ -1873,7 +2068,7 @@ deserialize_config(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8List str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node.first->string;
                     String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
@@ -1903,7 +2098,7 @@ deserialize_config(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8List str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node.first->string;
                     String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
@@ -1924,7 +2119,7 @@ deserialize_config(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8List str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node.first->string;
                     String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
@@ -1957,7 +2152,7 @@ deserialize_config(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8List str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node.first->string;
                     String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
@@ -2125,7 +2320,7 @@ deserialize_year(Year* year){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8List str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node.first->string;
                     String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
@@ -2164,7 +2359,7 @@ deserialize_year(Year* year){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8List str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node.first->string;
                     String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
@@ -2367,7 +2562,7 @@ deserialize_budget(void){
                     u32 count = str8_extend_word_to_byte(&word, '\x1B');
                     str8_advance(&line, count);
                 }
-                String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                String8List str8_node = str8_split(scratch.arena, word, '=');
                 String8 key = str8_node.first->string;
                 String8 value = str8_node.last->string;
                 if(str8_ends_with_byte(value, '\x1B')){
@@ -2394,7 +2589,7 @@ deserialize_budget(void){
                         str8_advance(&line, count);
                     }
 
-                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8List str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node.first->string;
                     String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
@@ -2429,7 +2624,7 @@ deserialize_budget(void){
                         u32 count = str8_extend_word_to_byte(&word, '\x1B');
                         str8_advance(&line, count);
                     }
-                    String8List str8_node = str8_split(scratch.arena, word, '=', 0);
+                    String8List str8_node = str8_split(scratch.arena, word, '=');
                     String8 key = str8_node.first->string;
                     String8 value = str8_node.last->string;
                     if(str8_ends_with_byte(value, '\x1B')){
@@ -2549,4 +2744,5 @@ RGBA_1_to_255(RGBA color){
 }
 
 f32 minus_padding = 8;
-#endif
+
+#endif // MAIN_H

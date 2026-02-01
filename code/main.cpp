@@ -118,9 +118,9 @@ init_paths(Arena* arena){
 }
 
 static void
-memory_init(){
-    memory.permanent_size = MB(500);
-    memory.transient_size = GB(1);
+memory_init(size_t pm_size, size_t tm_size){
+    memory.permanent_size = pm_size;
+    memory.transient_size = tm_size;
     memory.size = memory.permanent_size + memory.transient_size;
 
     memory.base = os_alloc(memory.size);
@@ -1964,8 +1964,8 @@ draw_entire_ui(void){
                                 }
                                 else{
                                     //s64 idx = str8_index_from_left(last_combo_name, ':');
-                                    String8List split_node1 = str8_split(tm->frame_arena, last_combo_name, ':', 0);
-                                    String8List split_node2 = str8_split(tm->frame_arena, selection_item, ':', 0);
+                                    String8List split_node1 = str8_split(tm->frame_arena, last_combo_name, ':');
+                                    String8List split_node2 = str8_split(tm->frame_arena, selection_item, ':');
                                     if(!str8_compare(split_node1.first->string, split_node2.first->string)){
                                         ++color_idx;
                                     }
@@ -2383,7 +2383,7 @@ draw_entire_ui(void){
                                     Transaction* last = trans->prev;
                                     s32 date_length = (s32)char_length(last->date);
                                     String8 date_str8 = str8(last->date, date_length);
-                                    String8List parts = str8_split(scratch.arena, date_str8, '/', 0);
+                                    String8List parts = str8_split(scratch.arena, date_str8, '/');
                                     parts.last->string = str8_fmt(scratch.arena, "%04d", year->number);
 
                                     String8Join join = {0};
@@ -2544,8 +2544,8 @@ draw_entire_ui(void){
                                 }
                                 else{
                                     //s64 idx = str8_index_from_left(last_combo_name, ':');
-                                    String8List split_node1 = str8_split(tm->frame_arena, last_combo_name, ':', 0);
-                                    String8List split_node2 = str8_split(tm->frame_arena, selection_item, ':', 0);
+                                    String8List split_node1 = str8_split(tm->frame_arena, last_combo_name, ':');
+                                    String8List split_node2 = str8_split(tm->frame_arena, selection_item, ':');
                                     if(!str8_compare(split_node1.first->string, split_node2.first->string)){
                                         ++color_idx;
                                     }
@@ -3126,7 +3126,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
     init_paths(global_arena);
     random_seed(0, 1);
 
-    memory_init();
+    memory_init(MB(500), GB(1));
     clock_init(&t_clock);
 
     init_events(&events);
@@ -3157,20 +3157,26 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         tm->options_arena = push_arena(&tm->arena, MB(100));
 
         // create pools
-        pm->category_group_pool = push_pool(&pm->arena, sizeof(CategoryGroup), MAX_CATEGORY_GROUP_COUNT);
-        pm->category_pool       = push_pool(&pm->arena, sizeof(Category), MAX_CATEGORY_COUNT);
-        pm->transaction_pool    = push_pool(&pm->arena, sizeof(Transaction), MAX_TRANSACTION_COUNT);
-        pm->csv_profile_pool    = push_pool(&pm->arena, sizeof(CSV_Profile), MAX_PROFILE_COUNT);
+        pm->category_group_pool   = push_pool(&pm->arena, sizeof(CategoryGroup), MAX_CATEGORY_GROUP_COUNT);
+        pm->category_pool         = push_pool(&pm->arena, sizeof(Category), MAX_CATEGORY_COUNT);
+        pm->transaction_pool      = push_pool(&pm->arena, sizeof(Transaction), MAX_TRANSACTION_COUNT);
+        pm->csv_profile_pool      = push_pool(&pm->arena, sizeof(CSV_Profile), MAX_PROFILE_COUNT);
+        //pm->merchant_pool       = push_pool(&pm->arena, sizeof(Merchant), MAX_MERCHANT_COUNT);
+        pm->canonical_table_arena = push_arena(&pm->arena, MB(1));
+        pm->merchant_arena        = push_arena(&pm->arena, MB(1));
         // todo(rr): maybe I can just use scratch memory? I don't think I need this
-        pm->data_arena          = push_arena(&pm->arena, MB(1));
+        pm->data_arena            = push_arena(&pm->arena, MB(1));
 
         // setup free list from pools
         pool_free_all(pm->category_group_pool);
         pool_free_all(pm->category_pool);
         pool_free_all(pm->transaction_pool);
         pool_free_all(pm->csv_profile_pool);
+        //pool_free_all(pm->merchant_pool);
 
-        // setup sentinel node for category_groups
+        // TODO: This is only because we use sentinels.
+        // Once we remove this requirement, we don't need any of this anymore.
+        // setup sentinel node for category_groups.
         pm->month_category_groups = (CategoryGroup*)pool_next(pm->category_group_pool);
         dll_clear(pm->month_category_groups);
         pm->quarter_category_groups = (CategoryGroup*)pool_next(pm->category_group_pool);
@@ -3181,6 +3187,8 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         dll_clear(pm->annual_category_groups);
         pm->csv_profiles = (CSV_Profile*)pool_next(pm->csv_profile_pool);
         dll_clear(pm->csv_profiles);
+        //pm->merchants = (Merchant*)pool_next(pm->merchant_pool);
+        //dll_clear(pm->merchants);
 
         pm->yyyy.str = push_array(&pm->arena, u8, 32);
         pm->mm.str = push_array(&pm->arena, u8, 32);
@@ -3209,7 +3217,8 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
         default_hover_color = ImGui::GetStyleColorVec4(ImGuiCol_TabHovered);
         hover_color = ImVec4(0.0f, default_hover_color.y * 0.4f, default_hover_color.z * 0.8f, default_hover_color.w);
 
-        // load config
+        pm->canonical_table = make_canonical_table(pm->canonical_table_arena, MAX_CANONICAL_MERCHANT_COUNT);
+
 
         // todo: do this once
         for(s32 i=0; i < 12; ++i){
@@ -3222,6 +3231,7 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
             pm->biannual_tab_flags[i] = 0;
         }
 
+        // load config
         deserialize_config();
         deserialize_budget();
         initialize_years_and_transactions();
@@ -3347,5 +3357,4 @@ s32 WinMain(HINSTANCE instance, HINSTANCE pinstance, LPSTR command_line, s32 win
     d3d_release();
     end_profiler();
 
-    return(0);
-}
+    return(0); }
